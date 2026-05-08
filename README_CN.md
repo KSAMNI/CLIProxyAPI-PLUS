@@ -150,6 +150,14 @@ v1.7.41-pro
 
 ### 构建 core Docker 镜像
 
+已发布镜像：
+
+```bash
+docker pull sfun/cliproxyapi-pro:latest
+```
+
+本地构建：
+
 ```bash
 docker build -t cliproxyapi-pro ./cliproxyapi-pro-core
 ```

@@ -150,6 +150,14 @@ v1.7.41-pro
 
 ### Build the core Docker image
 
+Published image:
+
+```bash
+docker pull sfun/cliproxyapi-pro:latest
+```
+
+Build locally:
+
 ```bash
 docker build -t cliproxyapi-pro ./cliproxyapi-pro-core
 ```
