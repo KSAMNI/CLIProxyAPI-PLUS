@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
@@ -10,7 +9,6 @@ import { ToggleSwitch } from '@/components/ui/ToggleSwitch';
 import {
   IconChevronDown,
   IconChevronUp,
-  IconExternalLink,
   IconShield,
 } from '@/components/ui/icons';
 import {
@@ -37,9 +35,10 @@ import {
   type AccountInspectionRunResult,
   type AccountInspectionSession,
 } from '@/features/monitoring/accountInspection';
-import { accountInspectionApi, type AccountInspectionScheduleResponse } from '@/services/api';
+import { accountInspectionApi, apiClient, type AccountInspectionScheduleResponse } from '@/services/api';
 import { sqliteQuotaCache } from '@/extensions/quota/sqliteQuotaCache';
 import { useAuthStore, useConfigStore, useNotificationStore, useQuotaStore } from '@/stores';
+import type { AuthFileItem } from '@/types';
 import styles from './AccountInspectionPage.module.scss';
 
 type RunStatus = 'idle' | 'running' | 'paused' | 'success' | 'error';
@@ -81,6 +80,66 @@ type InspectionSettingsDraftField = Exclude<
 type ScheduleDraft = {
   enabled: boolean;
   intervalMinutes: string;
+};
+
+type AuthFilesResponse = {
+  files: AuthFileItem[];
+  total?: number;
+};
+
+type AutoExecutionCounts = {
+  delete: number;
+  disable: number;
+  enable: number;
+};
+
+type AuthFileExportEntry = {
+  name: string;
+  provider: string;
+  metadata: AuthFileItem;
+  content: string;
+};
+
+type AuthFilesExportBundle = {
+  version: number;
+  exportedAt: string;
+  total: number;
+  providers: Record<string, AuthFileExportEntry[]>;
+};
+
+const emptyAutoExecutionCounts = (): AutoExecutionCounts => ({
+  delete: 0,
+  disable: 0,
+  enable: 0,
+});
+
+const getAuthFileProvider = (file: AuthFileItem) =>
+  String(file.provider ?? file.type ?? 'unknown').trim().toLowerCase() || 'unknown';
+
+const downloadJsonFile = (fileName: string, payload: unknown) => {
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = fileName;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+};
+
+const buildAuthFilesExportBundle = (entries: AuthFileExportEntry[]): AuthFilesExportBundle => {
+  const providers = entries.reduce<Record<string, AuthFileExportEntry[]>>((result, entry) => {
+    result[entry.provider] = [...(result[entry.provider] ?? []), entry];
+    return result;
+  }, {});
+
+  return {
+    version: 1,
+    exportedAt: new Date().toISOString(),
+    total: entries.length,
+    providers,
+  };
 };
 
 const actionToneClass: Record<AccountInspectionAction, string> = {
@@ -266,6 +325,7 @@ const applyBackendInspectionResponse = (
     setScheduleDraft: (draft: ScheduleDraft) => void;
     setScheduleResponse: (response: AccountInspectionScheduleResponse) => void;
     setBackendRunning: (running: boolean) => void;
+    setAutoExecutionCounts: (counts: AutoExecutionCounts) => void;
     setLogs: (logs: InspectionLogEntry[]) => void;
     setResult: (result: AccountInspectionRunResult | null) => void;
     setProgress: (progress: AccountInspectionProgressSnapshot) => void;
@@ -292,6 +352,11 @@ const applyBackendInspectionResponse = (
   const startedAt = response.status.lastStartedAt || Date.now();
   const finishedAt = response.status.lastFinishedAt || startedAt;
   const backendResults = (response.status.results ?? []).map(backendResultToFrontendItem);
+  setters.setAutoExecutionCounts({
+    delete: response.status.summary.executedDeleteCount ?? 0,
+    disable: response.status.summary.executedDisableCount ?? 0,
+    enable: response.status.summary.executedEnableCount ?? 0,
+  });
   if (backendResults.length > 0 || response.status.lastFinishedAt > 0) {
     setters.setResult({
       settings: {
@@ -359,6 +424,8 @@ export function AccountInspectionPage() {
   const [progress, setProgress] = useState<AccountInspectionProgressSnapshot>(createIdleProgressSnapshot);
   const [result, setResult] = useState<AccountInspectionRunResult | null>(null);
   const [executing, setExecuting] = useState(false);
+  const [exportingAuthFiles, setExportingAuthFiles] = useState(false);
+  const [autoExecutionCounts, setAutoExecutionCounts] = useState<AutoExecutionCounts>(emptyAutoExecutionCounts);
   const logCounterRef = useRef(0);
   const sessionRef = useRef<AccountInspectionSession | null>(null);
   const activeSessionIdRef = useRef<string | null>(null);
@@ -386,6 +453,7 @@ export function AccountInspectionPage() {
       setScheduleDraft,
       setScheduleResponse,
       setBackendRunning,
+      setAutoExecutionCounts,
       setLogs,
       setResult,
       setProgress,
@@ -569,6 +637,7 @@ export function AccountInspectionPage() {
 
       sessionRef.current = session;
       activeSessionIdRef.current = session.id;
+      setAutoExecutionCounts(emptyAutoExecutionCounts());
       setProgress(session.getProgress());
       attachSessionPromise(session, session.start(), autoExecuteSettings);
     },
@@ -595,23 +664,50 @@ export function AccountInspectionPage() {
     startFreshInspection(false);
   }, [runStatus, startFreshInspection]);
 
-  const handleBackendRunNow = useCallback(async () => {
+  const handleExportAuthFiles = useCallback(async () => {
     if (connectionStatus !== 'connected') {
       showNotification(t('notification.connection_required'), 'warning');
       return;
     }
-    setScheduleLoading(true);
+
+    setExportingAuthFiles(true);
     try {
-      const response = await accountInspectionApi.runNow();
-      applyBackendResponse(response);
-      showNotification(t('monitoring.account_inspection_backend_run_success'), 'success');
+      const response = await apiClient.get<AuthFilesResponse>('/auth-files');
+      const files = Array.isArray(response.files) ? response.files : [];
+      const entries = await Promise.all(
+        files
+          .filter((file) => typeof file.name === 'string' && file.name.trim())
+          .map(async (file) => {
+            const name = file.name.trim();
+            const downloadResponse = await apiClient.getRaw(`/auth-files/download?name=${encodeURIComponent(name)}`, {
+              responseType: 'blob',
+            });
+            const blob = downloadResponse.data instanceof Blob
+              ? downloadResponse.data
+              : new Blob([downloadResponse.data], { type: 'application/json' });
+            return {
+              name,
+              provider: getAuthFileProvider(file),
+              metadata: file,
+              content: await blob.text(),
+            };
+          })
+      );
+
+      if (entries.length === 0) {
+        showNotification(t('monitoring.account_inspection_auth_files_export_empty'), 'info');
+        return;
+      }
+
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+      downloadJsonFile(`auth-files-export-${timestamp}.json`, buildAuthFilesExportBundle(entries));
+      showNotification(t('monitoring.account_inspection_auth_files_export_success', { count: entries.length }), 'success');
     } catch (error) {
       showNotification(error instanceof Error ? error.message : String(error || t('common.unknown_error')), 'error');
     } finally {
-      setScheduleLoading(false);
+      setExportingAuthFiles(false);
     }
-  }, [applyBackendResponse, connectionStatus, showNotification, t]);
-
+  }, [connectionStatus, showNotification, t]);
 
   const handlePauseInspection = useCallback(() => {
     if (runStatus !== 'running') return;
@@ -630,6 +726,7 @@ export function AccountInspectionPage() {
     setProgress(createIdleProgressSnapshot());
     setResult(null);
     setLogsCollapsed(false);
+    setAutoExecutionCounts(emptyAutoExecutionCounts());
   }, [appendLog, t]);
 
   const executeItems = useCallback(
@@ -677,6 +774,13 @@ export function AccountInspectionPage() {
         setResult(nextResult);
 
         if (source === 'auto') {
+          const nextAutoExecutionCounts = execution.outcomes.reduce<AutoExecutionCounts>((counts, item) => {
+            if (!item.success) return counts;
+            counts[item.action] += 1;
+            return counts;
+          }, emptyAutoExecutionCounts());
+          setAutoExecutionCounts(nextAutoExecutionCounts);
+
           const successCount = execution.outcomes.filter((item) => item.success).length;
           const failedCount = execution.outcomes.length - successCount;
           const remainingCount = nextResult.results.filter(isSuggestedAction).length;
@@ -752,16 +856,30 @@ export function AccountInspectionPage() {
   const summaryCards = useMemo<SummaryCard[]>(() => {
     const summarySource =
       result?.summary ?? (runStatus === 'running' || runStatus === 'paused' ? progress.summary : null);
+    const hasAutoExecutePolicy = hasAccountInspectionAutoExecutePolicies(inspectionSettings);
+    const deleteLabel = hasAutoExecutePolicy
+      ? t('monitoring.account_inspection_deleted_count')
+      : t('monitoring.account_inspection_delete_count');
+    const disableLabel = hasAutoExecutePolicy
+      ? t('monitoring.account_inspection_disabled_count')
+      : t('monitoring.account_inspection_disable_count');
+    const enableLabel = hasAutoExecutePolicy
+      ? t('monitoring.account_inspection_enabled_count')
+      : t('monitoring.account_inspection_enable_count');
 
     if (!summarySource) {
       return [
         { key: 'total', label: t('monitoring.account_inspection_total_accounts'), value: '--' },
         { key: 'sampled', label: t('monitoring.account_inspection_sampled_accounts'), value: '--' },
-        { key: 'delete', label: t('monitoring.account_inspection_delete_count'), value: '--' },
-        { key: 'disable', label: t('monitoring.account_inspection_disable_count'), value: '--' },
-        { key: 'enable', label: t('monitoring.account_inspection_enable_count'), value: '--' },
+        { key: 'delete', label: deleteLabel, value: '--' },
+        { key: 'disable', label: disableLabel, value: '--' },
+        { key: 'enable', label: enableLabel, value: '--' },
       ];
     }
+
+    const deleteCount = hasAutoExecutePolicy ? autoExecutionCounts.delete : summarySource.deleteCount;
+    const disableCount = hasAutoExecutePolicy ? autoExecutionCounts.disable : summarySource.disableCount;
+    const enableCount = hasAutoExecutePolicy ? autoExecutionCounts.enable : summarySource.enableCount;
 
     return [
       {
@@ -776,24 +894,24 @@ export function AccountInspectionPage() {
       },
       {
         key: 'delete',
-        label: t('monitoring.account_inspection_delete_count'),
-        value: String(summarySource.deleteCount),
-        tone: summarySource.deleteCount > 0 ? 'bad' : 'neutral',
+        label: deleteLabel,
+        value: String(deleteCount),
+        tone: deleteCount > 0 ? 'bad' : 'neutral',
       },
       {
         key: 'disable',
-        label: t('monitoring.account_inspection_disable_count'),
-        value: String(summarySource.disableCount),
-        tone: summarySource.disableCount > 0 ? 'warn' : 'neutral',
+        label: disableLabel,
+        value: String(disableCount),
+        tone: disableCount > 0 ? 'warn' : 'neutral',
       },
       {
         key: 'enable',
-        label: t('monitoring.account_inspection_enable_count'),
-        value: String(summarySource.enableCount),
-        tone: summarySource.enableCount > 0 ? 'good' : 'neutral',
+        label: enableLabel,
+        value: String(enableCount),
+        tone: enableCount > 0 ? 'good' : 'neutral',
       },
     ];
-  }, [progress.summary, result, runStatus, t]);
+  }, [autoExecutionCounts, inspectionSettings, progress.summary, result, runStatus, t]);
 
   const pendingActionCount = actionableResults.length;
   const progressLabel =
@@ -950,10 +1068,6 @@ export function AccountInspectionPage() {
           </div>
 
           <div className={styles.heroActions}>
-            <Link to="/monitoring" className={styles.backLink}>
-              <IconExternalLink size={14} />
-              <span>{t('monitoring.account_inspection_back')}</span>
-            </Link>
             <Button
               variant="secondary"
               onClick={openSettingsModal}
@@ -963,13 +1077,11 @@ export function AccountInspectionPage() {
             </Button>
             <Button
               variant="secondary"
-              onClick={handleBackendRunNow}
-              loading={scheduleLoading || backendRunning}
-              disabled={scheduleLoading || backendRunning || connectionStatus !== 'connected'}
+              onClick={handleExportAuthFiles}
+              loading={exportingAuthFiles}
+              disabled={exportingAuthFiles || connectionStatus !== 'connected'}
             >
-              {backendRunning
-                ? t('monitoring.account_inspection_backend_running')
-                : t('monitoring.account_inspection_backend_run_now')}
+              {t('monitoring.account_inspection_auth_files_export')}
             </Button>
             <Button
               variant="secondary"
