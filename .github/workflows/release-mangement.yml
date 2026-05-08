@@ -1,0 +1,208 @@
+name: Build and Release CPA Pro Mangement
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 20 * * *'
+
+jobs:
+  check-version:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+
+    outputs:
+      should_release: ${{ steps.compare.outputs.should_release }}
+      current_tag: ${{ steps.compare.outputs.current_tag }}
+      current_base_version: ${{ steps.compare.outputs.current_base_version }}
+      upstream_tag: ${{ steps.compare.outputs.upstream_tag }}
+      upstream_base_version: ${{ steps.compare.outputs.upstream_base_version }}
+      release_tag: ${{ steps.compare.outputs.release_tag }}
+
+    steps:
+      - name: Compare latest release versions
+        id: compare
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CURRENT_REPO: ${{ github.repository }}
+          UPSTREAM_REPO: router-for-me/Cli-Proxy-API-Management-Center
+        run: |
+          set -euo pipefail
+
+          normalize_version() {
+            local version="$1"
+            version="${version#v}"
+            version="${version%-pro}"
+            echo "${version}"
+          }
+
+          pro_tag_for() {
+            local version="$1"
+            version="${version%-pro}"
+            echo "${version}-pro"
+          }
+
+          version_gt() {
+            local left="$1"
+            local right="$2"
+            [ "$(printf '%s\n%s\n' "${right}" "${left}" | sort -V | tail -n 1)" = "${left}" ] && [ "${left}" != "${right}" ]
+          }
+
+          current_tag="$(gh release view --repo "${CURRENT_REPO}" --json tagName --jq '.tagName' 2>/dev/null || true)"
+          upstream_tag="$(gh release view --repo "${UPSTREAM_REPO}" --json tagName --jq '.tagName')"
+
+          if [ -z "${upstream_tag}" ]; then
+            echo "No upstream latest release found." >&2
+            exit 1
+          fi
+
+          current_base_version="0.0.0"
+          if [ -n "${current_tag}" ]; then
+            current_base_version="$(normalize_version "${current_tag}")"
+          fi
+
+          upstream_base_version="$(normalize_version "${upstream_tag}")"
+          release_tag="$(pro_tag_for "${upstream_tag}")"
+
+          should_release="false"
+          if version_gt "${upstream_base_version}" "${current_base_version}"; then
+            should_release="true"
+          fi
+
+          echo "current_tag=${current_tag:-none}"
+          echo "current_base_version=${current_base_version}"
+          echo "upstream_tag=${upstream_tag}"
+          echo "upstream_base_version=${upstream_base_version}"
+          echo "release_tag=${release_tag}"
+          echo "should_release=${should_release}"
+
+          echo "current_tag=${current_tag}" >> "${GITHUB_OUTPUT}"
+          echo "current_base_version=${current_base_version}" >> "${GITHUB_OUTPUT}"
+          echo "upstream_tag=${upstream_tag}" >> "${GITHUB_OUTPUT}"
+          echo "upstream_base_version=${upstream_base_version}" >> "${GITHUB_OUTPUT}"
+          echo "release_tag=${release_tag}" >> "${GITHUB_OUTPUT}"
+          echo "should_release=${should_release}" >> "${GITHUB_OUTPUT}"
+
+  build-and-release:
+    needs: check-version
+    if: needs.check-version.outputs.should_release == 'true'
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout customizations
+        uses: actions/checkout@v5
+        with:
+          path: customizations-repo
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Checkout upstream latest release
+        uses: actions/checkout@v5
+        with:
+          repository: router-for-me/Cli-Proxy-API-Management-Center
+          ref: ${{ needs.check-version.outputs.upstream_tag }}
+          path: upstream
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Apply Pro customizations
+        run: bash customizations-repo/cliproxyapi-pro-management/apply.sh upstream
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: upstream/package-lock.json
+
+      - name: Install dependencies
+        working-directory: upstream
+        run: npm ci
+
+      - name: Build all-in-one HTML
+        working-directory: upstream
+        run: npm run build
+        env:
+          VERSION: ${{ needs.check-version.outputs.release_tag }}
+
+      - name: Prepare release assets
+        working-directory: upstream
+        run: |
+          cd dist
+          mv index.html management.html
+          ls -lh management.html
+
+      - name: Generate release notes
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          UPSTREAM_REPO: router-for-me/Cli-Proxy-API-Management-Center
+        run: |
+          set -euo pipefail
+
+          current_tag="${{ needs.check-version.outputs.current_tag }}"
+          current_base_version="${{ needs.check-version.outputs.current_base_version }}"
+          upstream_tag="${{ needs.check-version.outputs.upstream_tag }}"
+          upstream_base_version="${{ needs.check-version.outputs.upstream_base_version }}"
+          release_tag="${{ needs.check-version.outputs.release_tag }}"
+          upstream_sha="$(git -C upstream rev-parse HEAD)"
+          customization_sha="$(git -C customizations-repo rev-parse HEAD)"
+
+          upstream_notes="$(gh release view "${upstream_tag}" --repo "${UPSTREAM_REPO}" --json body --jq '.body // ""')"
+
+          : > release-notes.md
+          {
+            echo "Customized build of router-for-me/Cli-Proxy-API-Management-Center."
+            echo
+            echo "## Version mapping"
+            echo
+            echo "- Current latest release: ${current_tag:-none}"
+            echo "- Current comparable version: ${current_base_version}"
+            echo "- Upstream latest release: ${upstream_tag}"
+            echo "- Upstream comparable version: ${upstream_base_version}"
+            echo "- New release tag: ${release_tag}"
+            echo "- Upstream commit: ${upstream_sha}"
+            echo "- Customization commit: ${customization_sha}"
+            echo
+            echo "## Included Pro customizations"
+            echo
+            echo "- Request monitoring page backed by the Pro usage API."
+            echo "- Account inspection page with frontend and backend scheduled inspection support."
+            echo "- SQLite-backed quota cache and model price persistence."
+            echo "- Pro locale, route, API client, and UI integration patches."
+            echo
+            echo "## Upstream release notes"
+            echo
+            if [ -n "${upstream_notes}" ]; then
+              printf '%s\n' "${upstream_notes}"
+            else
+              echo "No upstream release notes were provided."
+            fi
+          } >> release-notes.md
+
+      - name: Create Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "${{ needs.check-version.outputs.release_tag }}" \
+            upstream/dist/management.html \
+            --title "${{ needs.check-version.outputs.release_tag }}" \
+            --notes-file release-notes.md
+
+  cleanup-runs:
+    runs-on: ubuntu-latest
+    needs: build-and-release
+    permissions:
+      actions: write
+      contents: read
+    steps:
+      - name: Delete old workflow runs
+        uses: Mattraks/delete-workflow-runs@v2
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          repository: ${{ github.repository }}
+          retain_days: 7
+          keep_minimum_runs: 6
