@@ -549,6 +549,15 @@ func (s *accountInspectionScheduler) inspectAccount(ctx context.Context, account
 		result.Error = "missing auth_index"
 		return result
 	}
+	if refreshed, refreshErr := s.refreshAccountIfDue(ctx, account, appendLog); refreshErr != nil {
+		result.Error = refreshErr.Error()
+		result.ActionReason = "刷新令牌失败，保留账号"
+		appendLog("warning", fmt.Sprintf("%s 刷新令牌失败，保留账号：%s", account.identity(), refreshErr.Error()))
+		return result
+	} else if refreshed.Auth != nil {
+		account = refreshed
+		result = account.baseResult()
+	}
 	var decision accountInspectionDecision
 	var statusCode *int
 	var err error
@@ -594,6 +603,24 @@ func (s *accountInspectionScheduler) inspectAccount(ctx context.Context, account
 	}
 	appendLog(level, fmt.Sprintf("%s -> %s (%s · 已用 %s)", account.identity(), result.Action, account.Provider, percent))
 	return result
+}
+
+func (s *accountInspectionScheduler) refreshAccountIfDue(ctx context.Context, account accountInspectionAccount, appendLog func(string, string)) (accountInspectionAccount, error) {
+	if account.Auth == nil || account.Auth.ID == "" || s == nil || s.h == nil || s.h.authManager == nil {
+		return account, nil
+	}
+	updated, refreshed, err := s.h.authManager.RefreshIfDueForInspection(ctx, account.Auth.ID)
+	if err != nil {
+		return account, err
+	}
+	if updated == nil {
+		return account, nil
+	}
+	refreshedAccount := accountFromAuth(updated)
+	if refreshed {
+		appendLog("success", fmt.Sprintf("%s 刷新令牌成功", refreshedAccount.identity()))
+	}
+	return refreshedAccount, nil
 }
 
 func (account accountInspectionAccount) baseResult() accountInspectionResult {
