@@ -160,8 +160,13 @@
   transform: none;
 }
 
+.controlLayout {
+  display: grid;
+  gap: 12px;
+}
+
 .metaRow {
-  margin-top: 16px;
+  margin-top: 0;
 }
 
 .metaPill,
@@ -179,12 +184,12 @@
 
 .progressSection {
   display: grid;
-  gap: 10px;
-  margin-top: 16px;
+  gap: 8px;
+  margin-top: 0;
   padding: 12px 14px;
-  border-radius: 12px;
-  border: 1px solid color-mix(in srgb, var(--inspect-accent) 18%, var(--inspect-line));
-  background: var(--inspect-surface-muted);
+  border-radius: 10px;
+  border: 1px solid color-mix(in srgb, var(--inspect-line) 74%, transparent);
+  background: color-mix(in srgb, var(--inspect-surface-muted) 62%, transparent);
 }
 
 .progressHeader {
@@ -707,7 +712,7 @@
 }
 
 .accountColumn {
-  width: 22%;
+  width: 20%;
 }
 
 .healthColumn {
@@ -739,7 +744,7 @@
 }
 
 .operationColumn {
-  width: 8%;
+  width: 12%;
 }
 
 .table th,
@@ -789,6 +794,16 @@
   word-break: break-all;
 }
 
+.operationActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.operationActions :global(.btn) {
+  padding: 6px 10px;
+}
+
 .actionBadge {
   display: inline-flex;
   align-items: center;
@@ -799,6 +814,7 @@
   font-size: 12px;
   font-weight: 600;
 }
+
 
 .actionKeep {
   background: var(--inspect-surface-muted);

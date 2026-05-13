@@ -50,6 +50,8 @@ type ResultHealthStatus = 'healthy' | 'disabled' | 'authInvalid' | 'quotaExhaust
 
 type ResultFilter = 'all' | 'pending' | 'authInvalid' | 'quotaExhausted' | 'inspectionError' | 'recoverable' | 'processed';
 
+type ManualAccountInspectionAction = Exclude<AccountInspectionAction, 'keep'>;
+
 type HealthCounts = {
   total: number;
   healthy: number;
@@ -498,6 +500,26 @@ const countHealthStatuses = (items: AccountInspectionResultItem[]): HealthCounts
     }
   });
   return counts;
+};
+
+const buildManualActionItem = (
+  item: AccountInspectionResultItem,
+  action: ManualAccountInspectionAction
+): AccountInspectionResultItem => ({
+  ...item,
+  action,
+  actionReason: item.actionReason || action,
+});
+
+const formatResultAccountSecondary = (item: AccountInspectionResultItem) => {
+  const identity = formatAccountInspectionIdentity(item);
+  return identity === item.fileName ? '' : identity;
+};
+
+const getManualActions = (item: AccountInspectionResultItem): ManualAccountInspectionAction[] => {
+  const healthStatus = resolveResultHealthStatus(item);
+  if (healthStatus === 'healthy' || healthStatus === 'processed') return [];
+  return [item.disabled ? 'enable' : 'disable', 'delete'];
 };
 
 const summaryToneClass: Record<NonNullable<SummaryCard['tone']>, string> = {
@@ -1216,18 +1238,19 @@ export function AccountInspectionPage() {
   }, [actionableResults, executeItems, result, showConfirmation, t]);
 
   const handleExecuteSingle = useCallback(
-    (item: AccountInspectionResultItem) => {
-      const actionLabel = formatActionLabel(item.action, t);
+    (item: AccountInspectionResultItem, manualAction?: ManualAccountInspectionAction) => {
+      const target = manualAction ? buildManualActionItem(item, manualAction) : item;
+      const actionLabel = formatActionLabel(target.action, t);
       showConfirmation({
         title: t('monitoring.account_inspection_execute_single_title'),
         message: t('monitoring.account_inspection_execute_single_body', {
-          account: formatAccountInspectionIdentity(item),
+          account: target.fileName,
           action: actionLabel,
         }),
         confirmText: actionLabel,
         cancelText: t('common.cancel'),
-        variant: item.action === 'delete' ? 'danger' : 'primary',
-        onConfirm: () => executeItems([item]),
+        variant: target.action === 'delete' ? 'danger' : 'primary',
+        onConfirm: () => executeItems([target]),
       });
     },
     [executeItems, showConfirmation, t]
@@ -1571,58 +1594,60 @@ export function AccountInspectionPage() {
           </div>
         </div>
 
-        <div className={styles.metaRow}>
-          <span className={styles.metaPill}>{`${t('monitoring.account_inspection_target_type')}: ${inspectionSettings.targetType}`}</span>
-          <span className={styles.metaPill}>
-            {`${t('monitoring.account_inspection_schedule_status')}: ${
-              scheduleResponse?.schedule.enabled ? t('common.yes') : t('common.no')
-            }`}
-          </span>
-          <span className={styles.metaPill}>
-            {`${t('monitoring.account_inspection_schedule_next_run')}: ${
-              scheduleResponse?.schedule.enabled && scheduleResponse.schedule.nextRunAt
-                ? formatTimestamp(scheduleResponse.schedule.nextRunAt, i18n.language)
-                : '--'
-            }`}
-          </span>
-        </div>
+        <div className={styles.controlLayout}>
+          <div className={styles.metaRow}>
+            <span className={styles.metaPill}>{`${t('monitoring.account_inspection_target_type')}: ${inspectionSettings.targetType}`}</span>
+            <span className={styles.metaPill}>
+              {`${t('monitoring.account_inspection_schedule_status')}: ${
+                scheduleResponse?.schedule.enabled ? t('common.yes') : t('common.no')
+              }`}
+            </span>
+            <span className={styles.metaPill}>
+              {`${t('monitoring.account_inspection_schedule_next_run')}: ${
+                scheduleResponse?.schedule.enabled && scheduleResponse.schedule.nextRunAt
+                  ? formatTimestamp(scheduleResponse.schedule.nextRunAt, i18n.language)
+                  : '--'
+              }`}
+            </span>
+          </div>
 
-        <div className={styles.progressSection}>
-          <div className={styles.progressHeader}>
-            <strong>{t('monitoring.account_inspection_progress_title')}</strong>
-            <span>{`${progress.percent}%`}</span>
-          </div>
-          <div className={styles.progressTrack}>
-            <span className={styles.progressBar} style={{ width: `${Math.max(0, Math.min(100, progress.percent))}%` }} />
-          </div>
-          <div className={styles.progressFooter}>
-            <div className={styles.progressMeta}>
-              <span>{progressLabel}</span>
-              {runStatus === 'paused' ? <strong>{t('monitoring.account_inspection_paused')}</strong> : null}
+          <div className={styles.progressSection}>
+            <div className={styles.progressHeader}>
+              <strong>{t('monitoring.account_inspection_progress_title')}</strong>
+              <span>{`${progress.percent}%`}</span>
             </div>
-            <div className={styles.progressActions}>
-              <Button
-                variant="secondary"
-                onClick={handleRunInspection}
-                loading={runStatus === 'running'}
-                disabled={runStatus === 'running' || executing || connectionStatus !== 'connected'}
-              >
-                {formatRunInspectionButtonLabel(runStatus, t)}
-              </Button>
-              <Button
-                variant="secondary"
-                onClick={handlePauseInspection}
-                disabled={runStatus !== 'running' || executing}
-              >
-                {t('monitoring.account_inspection_pause')}
-              </Button>
-              <Button
-                variant="danger"
-                onClick={handleStopInspection}
-                disabled={(runStatus !== 'running' && runStatus !== 'paused') || executing}
-              >
-                {t('monitoring.account_inspection_stop')}
-              </Button>
+            <div className={styles.progressTrack}>
+              <span className={styles.progressBar} style={{ width: `${Math.max(0, Math.min(100, progress.percent))}%` }} />
+            </div>
+            <div className={styles.progressFooter}>
+              <div className={styles.progressMeta}>
+                <span>{progressLabel}</span>
+                {runStatus === 'paused' ? <strong>{t('monitoring.account_inspection_paused')}</strong> : null}
+              </div>
+              <div className={styles.progressActions}>
+                <Button
+                  variant="secondary"
+                  onClick={handleRunInspection}
+                  loading={runStatus === 'running'}
+                  disabled={runStatus === 'running' || executing || connectionStatus !== 'connected'}
+                >
+                  {formatRunInspectionButtonLabel(runStatus, t)}
+                </Button>
+                <Button
+                  variant="secondary"
+                  onClick={handlePauseInspection}
+                  disabled={runStatus !== 'running' || executing}
+                >
+                  {t('monitoring.account_inspection_pause')}
+                </Button>
+                <Button
+                  variant="danger"
+                  onClick={handleStopInspection}
+                  disabled={(runStatus !== 'running' && runStatus !== 'paused') || executing}
+                >
+                  {t('monitoring.account_inspection_stop')}
+                </Button>
+              </div>
             </div>
           </div>
         </div>
@@ -1725,11 +1750,14 @@ export function AccountInspectionPage() {
                   {filteredResults.length > 0 ? (
                     filteredResults.map((item) => {
                       const healthStatus = resolveResultHealthStatus(item);
+                      const manualActions = getManualActions(item);
+                      const accountSecondary = formatResultAccountSecondary(item);
                       return (
                         <tr key={item.key}>
                           <td>
                             <div className={styles.primaryCell}>
-                              <span>{formatAccountInspectionIdentity(item)}</span>
+                              <span>{item.fileName}</span>
+                              {accountSecondary ? <small>{accountSecondary}</small> : null}
                               <small>{item.provider}</small>
                             </div>
                           </td>
@@ -1749,15 +1777,20 @@ export function AccountInspectionPage() {
                           <td>{item.actionReason}</td>
                           <td className={item.error ? styles.errorText : styles.mutedText}>{item.error || '--'}</td>
                           <td>
-                            {isSuggestedAction(item) ? (
-                              <Button
-                                size="sm"
-                                variant={item.action === 'delete' ? 'danger' : 'secondary'}
-                                onClick={() => handleExecuteSingle(item)}
-                                disabled={runStatus === 'running' || executing}
-                              >
-                                {formatActionLabel(item.action, t)}
-                              </Button>
+                            {manualActions.length > 0 ? (
+                              <div className={styles.operationActions}>
+                                {manualActions.map((action) => (
+                                  <Button
+                                    key={action}
+                                    size="sm"
+                                    variant={action === 'delete' ? 'danger' : 'secondary'}
+                                    onClick={() => handleExecuteSingle(item, action)}
+                                    disabled={runStatus === 'running' || executing}
+                                  >
+                                    {formatActionLabel(action, t)}
+                                  </Button>
+                                ))}
+                              </div>
                             ) : (
                               <span className={styles.mutedText}>--</span>
                             )}
