@@ -542,6 +542,7 @@ export interface UseMonitoringDataReturn {
   failureSourceRows: MonitoringFailureSourceRow[];
   taskBuckets: MonitoringTaskBucketRow[];
   recentFailures: MonitoringFailureRow[];
+  allRows: MonitoringEventRow[];
   filteredRows: MonitoringEventRow[];
   refreshMeta: (showLoading?: boolean) => Promise<void>;
 }
@@ -1791,6 +1792,7 @@ export function useMonitoringData({
     failureSourceRows,
     taskBuckets,
     recentFailures,
+    allRows,
     filteredRows,
     refreshMeta,
   };

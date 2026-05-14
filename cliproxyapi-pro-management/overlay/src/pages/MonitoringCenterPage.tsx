@@ -499,6 +499,7 @@ function RankingPanel({
   maxCalls,
   emptyText,
   hasPrices,
+  variant,
 }: {
   title: string;
   subtitle: string;
@@ -506,6 +507,7 @@ function RankingPanel({
   maxCalls: number;
   emptyText: string;
   hasPrices: boolean;
+  variant: 'model' | 'apiKey';
 }) {
   return (
     <Card className={styles.rankingCard}>
@@ -516,27 +518,33 @@ function RankingPanel({
         </div>
       </div>
       <div className={styles.rankingList}>
-        {rows.map((row, index) => (
-          <div key={row.id} className={styles.rankingRow}>
-            <span className={styles.rankingIndex}>{index + 1}</span>
-            <div className={styles.rankingMain}>
-              <div className={styles.rankingTitleLine}>
-                <strong>{row.account}</strong>
-                <span>{formatCompactNumber(row.totalCalls)}</span>
+        {rows.map((row, index) => {
+          const titleMeta = variant === 'model'
+            ? `${formatCompactNumber(row.totalTokens)} tokens`
+            : `${row.authLabels.length} accounts`;
+
+          return (
+            <div key={row.id} className={styles.rankingRow}>
+              <span className={styles.rankingIndex}>{index + 1}</span>
+              <div className={styles.rankingMain}>
+                <div className={styles.rankingTitleLine}>
+                  <strong>{row.account}</strong>
+                  <span>{formatCompactNumber(row.totalCalls)}</span>
+                </div>
+                <div className={styles.rankingMetaLine}>
+                  <span>{titleMeta}</span>
+                  <span>{formatPercent(row.successRate)}</span>
+                  <span>{hasPrices ? formatUsd(row.totalCost) : '--'}</span>
+                </div>
+                <span
+                  className={styles.rankingBar}
+                  style={{ '--ranking-width': `${Math.max((row.totalCalls / maxCalls) * 100, 4)}%` } as CSSProperties}
+                  aria-hidden="true"
+                />
               </div>
-              <div className={styles.rankingMetaLine}>
-                <span>{formatPercent(row.successRate)}</span>
-                <span>{formatCompactNumber(row.totalTokens)}</span>
-                <span>{hasPrices ? formatUsd(row.totalCost) : '--'}</span>
-              </div>
-              <span
-                className={styles.rankingBar}
-                style={{ '--ranking-width': `${Math.max((row.totalCalls / maxCalls) * 100, 4)}%` } as CSSProperties}
-                aria-hidden="true"
-              />
             </div>
-          </div>
-        ))}
+          );
+        })}
         {rows.length === 0 ? <div className={styles.emptyBlockSmall}>{emptyText}</div> : null}
       </div>
     </Card>
@@ -888,6 +896,7 @@ export function MonitoringCenterPage() {
     loading: monitoringLoading,
     error: monitoringError,
     authFiles,
+    allRows,
     filteredRows,
     refreshMeta,
   } = useMonitoringData({
@@ -1114,17 +1123,20 @@ export function MonitoringCenterPage() {
   );
   const scopedStatsRows = useMemo(() => focusedRows.filter((row) => row.statsIncluded), [focusedRows]);
 
+  const topStatsRows = useMemo(() => allRows.filter((row) => row.statsIncluded), [allRows]);
+  const topSummary = useMemo(() => buildMonitoringSummary(topStatsRows), [topStatsRows]);
+  const topAccountRows = useMemo(() => buildAccountRows(topStatsRows, 'account'), [topStatsRows]);
   const modelRankingRows = useMemo(
-    () => [...buildAccountRows(scopedRows, 'model')]
+    () => [...buildAccountRows(topStatsRows, 'model')]
       .sort((left, right) => right.totalCalls - left.totalCalls || right.totalCost - left.totalCost)
       .slice(0, 8),
-    [scopedRows]
+    [topStatsRows]
   );
   const apiKeyRankingRows = useMemo(
-    () => [...buildAccountRows(scopedRows, 'apiKey')]
+    () => [...buildAccountRows(topStatsRows, 'apiKey')]
       .sort((left, right) => right.totalCalls - left.totalCalls || right.totalCost - left.totalCost)
       .slice(0, 8),
-    [scopedRows]
+    [topStatsRows]
   );
   const trendPoints = useMemo(() => buildTrendPoints(focusedRows), [focusedRows]);
   const failureAnalysisRows = useMemo(() => buildFailureAnalysisRows(focusedRows), [focusedRows]);
@@ -1248,50 +1260,50 @@ export function MonitoringCenterPage() {
   const summaryCards: SummaryCardProps[] = [
     {
       label: t('monitoring.total_calls'),
-      value: formatCompactNumber(scopedSummary.totalCalls),
-      meta: `${accountRows.length} ${accountGroupBy === 'apiKey' ? t('monitoring.api_keys_suffix') : accountGroupBy === 'model' ? t('monitoring.models_suffix') : t('monitoring.accounts_suffix')}${focusScope ? ` · ${t('monitoring.focused_scope_label')}: ${activeScopeRows.length}` : ''}`,
+      value: formatCompactNumber(topSummary.totalCalls),
+      meta: `${topAccountRows.length} ${t('monitoring.accounts_suffix')}`,
     },
     {
       label: t('monitoring.success_calls'),
-      value: <SuccessFailureValue success={scopedSummary.successCalls} failure={scopedSummary.failureCalls} />,
-      meta: formatPercent(scopedSummary.successRate),
+      value: <SuccessFailureValue success={topSummary.successCalls} failure={topSummary.failureCalls} />,
+      meta: formatPercent(topSummary.successRate),
     },
     {
       label: t('monitoring.call_success_rate'),
-      value: formatPercent(scopedSummary.successRate),
-      meta: formatDurationMs(scopedSummary.averageLatencyMs, { locale: i18n.language }),
+      value: formatPercent(topSummary.successRate),
+      meta: formatDurationMs(topSummary.averageLatencyMs, { locale: i18n.language }),
       tone:
-        scopedSummary.successRate >= 0.95
+        topSummary.successRate >= 0.95
           ? 'good'
-          : scopedSummary.successRate >= 0.85
+          : topSummary.successRate >= 0.85
             ? 'warn'
             : 'bad',
     },
     {
       label: t('monitoring.estimated_cost'),
-      value: hasPrices ? formatUsd(scopedSummary.totalCost) : '--',
+      value: hasPrices ? formatUsd(topSummary.totalCost) : '--',
       meta: hasPrices ? t('monitoring.estimated_cost_hint') : t('monitoring.estimated_cost_missing'),
       tone: hasPrices ? undefined : 'warn',
     },
     {
       label: t('monitoring.input_tokens'),
-      value: formatCompactNumber(scopedSummary.inputTokens),
-      meta: `${t('monitoring.of_token_mix')} ${formatPercent(scopedSummary.totalTokens > 0 ? scopedSummary.inputTokens / scopedSummary.totalTokens : 0)}`,
+      value: formatCompactNumber(topSummary.inputTokens),
+      meta: `${t('monitoring.of_token_mix')} ${formatPercent(topSummary.totalTokens > 0 ? topSummary.inputTokens / topSummary.totalTokens : 0)}`,
     },
     {
       label: t('monitoring.output_tokens'),
-      value: formatCompactNumber(scopedSummary.outputTokens),
-      meta: `${t('monitoring.of_token_mix')} ${formatPercent(scopedSummary.totalTokens > 0 ? scopedSummary.outputTokens / scopedSummary.totalTokens : 0)}`,
+      value: formatCompactNumber(topSummary.outputTokens),
+      meta: `${t('monitoring.of_token_mix')} ${formatPercent(topSummary.totalTokens > 0 ? topSummary.outputTokens / topSummary.totalTokens : 0)}`,
     },
     {
       label: t('monitoring.cached_tokens'),
-      value: formatCompactNumber(scopedSummary.cachedTokens),
-      meta: `${t('monitoring.of_input_tokens')} ${formatPercent(scopedSummary.inputTokens > 0 ? scopedSummary.cachedTokens / scopedSummary.inputTokens : 0)}`,
+      value: formatCompactNumber(topSummary.cachedTokens),
+      meta: `${t('monitoring.of_input_tokens')} ${formatPercent(topSummary.inputTokens > 0 ? topSummary.cachedTokens / topSummary.inputTokens : 0)}`,
     },
     {
       label: t('monitoring.total_tokens'),
-      value: formatCompactNumber(scopedSummary.totalTokens),
-      meta: `${t('monitoring.reasoning_tokens')} ${formatCompactNumber(scopedSummary.reasoningTokens)}`,
+      value: formatCompactNumber(topSummary.totalTokens),
+      meta: `${t('monitoring.reasoning_tokens')} ${formatCompactNumber(topSummary.reasoningTokens)}`,
     },
   ];
 
@@ -1664,6 +1676,7 @@ export function MonitoringCenterPage() {
           maxCalls={maxModelRankingCalls}
           emptyText={t('monitoring.no_data')}
           hasPrices={hasPrices}
+          variant="model"
         />
         <RankingPanel
           title={t('monitoring.api_key_ranking_title')}
@@ -1672,6 +1685,7 @@ export function MonitoringCenterPage() {
           maxCalls={maxApiKeyRankingCalls}
           emptyText={t('monitoring.no_data')}
           hasPrices={hasPrices}
+          variant="apiKey"
         />
       </section>
 
