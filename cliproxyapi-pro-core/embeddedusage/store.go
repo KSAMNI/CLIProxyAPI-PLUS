@@ -206,23 +206,7 @@ func (s *Store) AddDeadLetter(ctx context.Context, payload string, parseErr erro
 	return err
 }
 
-func (s *Store) RecentEvents(ctx context.Context, limit int) ([]internalusage.Event, error) {
-	if limit <= 0 {
-		limit = 50000
-	}
-	rows, err := s.db.QueryContext(ctx, `select
-		request_id, event_hash, timestamp_ms, timestamp, provider, model, endpoint, method, path,
-		auth_type, auth_index, source, source_hash, api_key_hash,
-		input_tokens, output_tokens, reasoning_tokens, cached_tokens, cache_tokens, total_tokens,
-		latency_ms, failed, raw_json, created_at_ms
-		from usage_events
-		order by timestamp_ms desc, id desc
-		limit ?`, limit)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
+func (s *Store) scanEvents(rows *sql.Rows) ([]internalusage.Event, error) {
 	events := make([]internalusage.Event, 0)
 	for rows.Next() {
 		var event internalusage.Event
@@ -230,7 +214,7 @@ func (s *Store) RecentEvents(ctx context.Context, limit int) ([]internalusage.Ev
 		var latency sql.NullInt64
 		var failed int
 		if err := rows.Scan(
-			&requestID, &event.EventHash, &event.TimestampMS, &event.Timestamp, &provider, &event.Model,
+			&event.ID, &requestID, &event.EventHash, &event.TimestampMS, &event.Timestamp, &provider, &event.Model,
 			&endpoint, &method, &path, &authType, &authIndex, &source, &sourceHash, &apiKeyHash,
 			&event.InputTokens, &event.OutputTokens, &event.ReasoningTokens, &event.CachedTokens, &event.CacheTokens, &event.TotalTokens,
 			&latency, &failed, &rawJSON, &event.CreatedAtMS,
@@ -256,6 +240,65 @@ func (s *Store) RecentEvents(ctx context.Context, limit int) ([]internalusage.Ev
 		events = append(events, event)
 	}
 	return events, rows.Err()
+}
+
+func (s *Store) RecentEvents(ctx context.Context, limit int) ([]internalusage.Event, error) {
+	if limit <= 0 {
+		limit = 50000
+	}
+	rows, err := s.db.QueryContext(ctx, `select
+		id, request_id, event_hash, timestamp_ms, timestamp, provider, model, endpoint, method, path,
+		auth_type, auth_index, source, source_hash, api_key_hash,
+		input_tokens, output_tokens, reasoning_tokens, cached_tokens, cache_tokens, total_tokens,
+		latency_ms, failed, raw_json, created_at_ms
+		from usage_events
+		order by timestamp_ms desc, id desc
+		limit ?`, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	return s.scanEvents(rows)
+}
+
+func (s *Store) EventsAfter(ctx context.Context, afterID int64, limit int) ([]internalusage.Event, error) {
+	if limit <= 0 || limit > 5000 {
+		limit = 5000
+	}
+	rows, err := s.db.QueryContext(ctx, `select
+		id, request_id, event_hash, timestamp_ms, timestamp, provider, model, endpoint, method, path,
+		auth_type, auth_index, source, source_hash, api_key_hash,
+		input_tokens, output_tokens, reasoning_tokens, cached_tokens, cache_tokens, total_tokens,
+		latency_ms, failed, raw_json, created_at_ms
+		from usage_events
+		where id > ?
+		order by id asc
+		limit ?`, afterID, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	return s.scanEvents(rows)
+}
+
+func (s *Store) LatestCursor(ctx context.Context) (int64, int64, error) {
+	var id sql.NullInt64
+	var timestamp sql.NullInt64
+	if err := s.db.QueryRowContext(ctx, `select id, timestamp_ms from usage_events order by id desc limit 1`).Scan(&id, &timestamp); err != nil {
+		if err == sql.ErrNoRows {
+			return 0, 0, nil
+		}
+		return 0, 0, err
+	}
+	latestID := int64(0)
+	latestTimestamp := int64(0)
+	if id.Valid {
+		latestID = id.Int64
+	}
+	if timestamp.Valid {
+		latestTimestamp = timestamp.Int64
+	}
+	return latestID, latestTimestamp, nil
 }
 
 func (s *Store) Counts(ctx context.Context) (events int64, deadLetters int64, err error) {

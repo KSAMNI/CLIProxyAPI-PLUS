@@ -12,6 +12,7 @@ import (
 )
 
 type Event struct {
+	ID              int64  `json:"id,omitempty"`
 	RequestID       string `json:"request_id,omitempty"`
 	EventHash       string `json:"event_hash"`
 	TimestampMS     int64  `json:"timestamp_ms"`
@@ -70,6 +71,7 @@ type Payload struct {
 	SuccessCount  int64                    `json:"success_count"`
 	FailureCount  int64                    `json:"failure_count"`
 	TotalTokens   int64                    `json:"total_tokens"`
+	LatestID      int64                    `json:"latest_id"`
 	APIs          map[string]*APIAggregate `json:"apis"`
 }
 
@@ -167,6 +169,9 @@ func BuildPayload(events []Event) Payload {
 			payload.SuccessCount++
 		}
 		payload.TotalTokens += event.TotalTokens
+		if event.ID > payload.LatestID {
+			payload.LatestID = event.ID
+		}
 
 		endpoint := event.Endpoint
 		if endpoint == "" {

@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { apiClient } from '@/services/api/client';
+import { useAuthStore } from '@/stores/useAuthStore';
+import { computeApiUrl } from '@/utils/connection';
 import {
   loadLegacyModelPrices,
   loadModelPricesFromSqlite,
@@ -12,6 +14,7 @@ export interface UsagePayload {
   success_count?: number;
   failure_count?: number;
   total_tokens?: number;
+  latest_id?: number;
   apis?: Record<string, unknown>;
   [key: string]: unknown;
 }
@@ -23,8 +26,73 @@ export interface UseUsageDataReturn {
   lastRefreshedAt: Date | null;
   modelPrices: Record<string, ModelPrice>;
   setModelPrices: (prices: Record<string, ModelPrice>) => void;
-  loadUsage: () => Promise<void>;
+  refreshUsage: () => Promise<void>;
 }
+
+const toNumber = (value: unknown) => (Number.isFinite(Number(value)) ? Number(value) : 0);
+
+const mergeUsagePayload = (current: UsagePayload | null, next: UsagePayload | null): UsagePayload | null => {
+  if (!next) return current;
+  if (!current) return next;
+
+  const currentLatestId = toNumber(current.latest_id);
+  const nextLatestId = toNumber(next.latest_id);
+  if (nextLatestId <= currentLatestId) return current;
+
+  const mergedApis: Record<string, unknown> = { ...(current.apis ?? {}) };
+  Object.entries(next.apis ?? {}).forEach(([endpoint, apiEntry]) => {
+    const existingApi = mergedApis[endpoint] as { models?: Record<string, { details?: unknown[] }> } | undefined;
+    const nextApi = apiEntry as { models?: Record<string, { details?: unknown[] }> } | undefined;
+    const models: Record<string, { details?: unknown[] }> = { ...(existingApi?.models ?? {}) };
+
+    Object.entries(nextApi?.models ?? {}).forEach(([model, modelEntry]) => {
+      const existingModel = models[model];
+      models[model] = {
+        ...(existingModel ?? {}),
+        ...(modelEntry ?? {}),
+        details: [
+          ...(Array.isArray(existingModel?.details) ? existingModel.details : []),
+          ...(Array.isArray(modelEntry?.details) ? modelEntry.details : []),
+        ],
+      };
+    });
+
+    mergedApis[endpoint] = {
+      ...(existingApi ?? {}),
+      ...(nextApi ?? {}),
+      models,
+    };
+  });
+
+  return {
+    ...current,
+    total_requests: toNumber(current.total_requests) + toNumber(next.total_requests),
+    success_count: toNumber(current.success_count) + toNumber(next.success_count),
+    failure_count: toNumber(current.failure_count) + toNumber(next.failure_count),
+    total_tokens: toNumber(current.total_tokens) + toNumber(next.total_tokens),
+    latest_id: nextLatestId,
+    apis: mergedApis,
+  };
+};
+
+const buildUsageStreamUrl = (apiBase: string, afterId: number) => {
+  const base = computeApiUrl(apiBase);
+  if (!base) return '';
+  const url = new URL(`${base}/usage/stream`);
+  url.searchParams.set('after_id', String(Math.max(afterId, 0)));
+  return url.toString();
+};
+
+const readSseMessage = (block: string): { event: string; data: string } | null => {
+  if (!block.trim()) return null;
+  let event = 'message';
+  const dataLines: string[] = [];
+  block.split('\n').forEach((line) => {
+    if (line.startsWith('event:')) event = line.slice(6).trim();
+    if (line.startsWith('data:')) dataLines.push(line.slice(5).trim());
+  });
+  return dataLines.length > 0 ? { event, data: dataLines.join('\n') } : null;
+};
 
 export function useUsageData(): UseUsageDataReturn {
   const [usage, setUsage] = useState<UsagePayload | null>(null);
@@ -32,7 +100,12 @@ export function useUsageData(): UseUsageDataReturn {
   const [error, setError] = useState('');
   const [lastRefreshedAt, setLastRefreshedAt] = useState<Date | null>(null);
   const [modelPrices, setModelPricesState] = useState<Record<string, ModelPrice>>({});
+  const apiBase = useAuthStore((state) => state.apiBase);
+  const managementKey = useAuthStore((state) => state.managementKey);
+  const connectionStatus = useAuthStore((state) => state.connectionStatus);
   const requestIdRef = useRef(0);
+  const latestIdRef = useRef(0);
+  const incrementalLoadingRef = useRef(false);
 
   const loadUsage = useCallback(async () => {
     const requestId = requestIdRef.current + 1;
@@ -43,6 +116,7 @@ export function useUsageData(): UseUsageDataReturn {
     try {
       const payload = await apiClient.get<UsagePayload>('/usage');
       if (requestIdRef.current !== requestId) return;
+      latestIdRef.current = toNumber(payload?.latest_id);
       setUsage(payload ?? null);
       setLastRefreshedAt(new Date());
     } catch (err) {
@@ -54,6 +128,30 @@ export function useUsageData(): UseUsageDataReturn {
       }
     }
   }, []);
+
+  const loadUsageIncremental = useCallback(async () => {
+    if (incrementalLoadingRef.current) return;
+    const afterId = latestIdRef.current;
+    if (afterId <= 0) {
+      await loadUsage();
+      return;
+    }
+
+    incrementalLoadingRef.current = true;
+    try {
+      const payload = await apiClient.get<UsagePayload>(`/usage/events?after_id=${afterId}&limit=5000`);
+      const nextLatestId = toNumber(payload?.latest_id);
+      if (nextLatestId > latestIdRef.current) {
+        latestIdRef.current = nextLatestId;
+        setUsage((current) => mergeUsagePayload(current, payload ?? null));
+        setLastRefreshedAt(new Date());
+      }
+    } catch {
+      await loadUsage();
+    } finally {
+      incrementalLoadingRef.current = false;
+    }
+  }, [loadUsage]);
 
   useEffect(() => {
     let cancelled = false;
@@ -84,6 +182,47 @@ export function useUsageData(): UseUsageDataReturn {
     };
   }, [loadUsage]);
 
+  useEffect(() => {
+    if (connectionStatus !== 'connected' || !apiBase || !managementKey) return;
+
+    const controller = new AbortController();
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    const connect = async () => {
+      try {
+        const url = buildUsageStreamUrl(apiBase, latestIdRef.current);
+        if (!url) return;
+        const response = await fetch(url, {
+          headers: { Authorization: `Bearer ${managementKey}` },
+          signal: controller.signal,
+        });
+        if (!response.ok || !response.body) return;
+
+        const reader = response.body.getReader();
+        while (!controller.signal.aborted) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          const parts = buffer.split('\n\n');
+          buffer = parts.pop() ?? '';
+          parts.forEach((part) => {
+            const message = readSseMessage(part);
+            if (message?.event !== 'usage') return;
+            void loadUsageIncremental();
+          });
+        }
+      } catch (err) {
+        if (!controller.signal.aborted) {
+          console.warn('Usage SSE stream disconnected:', err);
+        }
+      }
+    };
+
+    void connect();
+    return () => controller.abort();
+  }, [apiBase, connectionStatus, loadUsageIncremental, managementKey]);
+
   const setModelPrices = useCallback((prices: Record<string, ModelPrice>) => {
     setModelPricesState(prices);
     void saveModelPricesToSqlite(prices).catch((err) => {
@@ -98,6 +237,6 @@ export function useUsageData(): UseUsageDataReturn {
     lastRefreshedAt,
     modelPrices,
     setModelPrices,
-    loadUsage,
+    refreshUsage: loadUsageIncremental,
   };
 }

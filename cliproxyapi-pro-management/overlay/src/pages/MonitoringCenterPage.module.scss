@@ -742,16 +742,19 @@
   min-width: 0;
 }
 
+.timeRangeControl,
 .usageTrendRangeControl {
   max-width: 100%;
   overflow-x: auto;
   scrollbar-width: none;
 }
 
+.timeRangeControl::-webkit-scrollbar,
 .usageTrendRangeControl::-webkit-scrollbar {
   display: none;
 }
 
+.timeRangeButton,
 .usageTrendRangeButton {
   flex: 0 0 auto;
   min-width: 50px;
@@ -768,6 +771,10 @@
 
 .usageTrendHideButton:hover {
   color: var(--monitor-ink);
+}
+
+.mobileHeaderHideButton {
+  display: none;
 }
 
 .usageTrendCollapsed {
@@ -838,6 +845,37 @@
 .usageTrendApiKeySelect {
   width: 150px;
   flex: 0 0 auto;
+}
+
+.tokenDistributionHeader {
+  align-items: flex-start;
+}
+
+.tokenCostBadge {
+  display: grid;
+  gap: 3px;
+  flex: 0 0 auto;
+  min-width: 108px;
+  padding: 8px 10px;
+  border: 1px solid color-mix(in srgb, #047857 26%, var(--monitor-line));
+  border-radius: 10px;
+  background: color-mix(in srgb, #047857 8%, var(--monitor-surface));
+  text-align: right;
+}
+
+.tokenCostBadge span {
+  color: var(--monitor-muted);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.1;
+}
+
+.tokenCostBadge strong {
+  color: #047857;
+  font-size: 14px;
+  font-weight: 850;
+  letter-spacing: -0.01em;
+  line-height: 1.15;
 }
 
 .trendHeaderStats {
@@ -1879,24 +1917,27 @@
   height: auto;
   min-width: 0;
   padding: 16px;
-  border: 1px solid color-mix(in srgb, var(--monitor-line) 84%, transparent);
-  border-radius: 22px;
-  background: linear-gradient(
-    180deg,
-    color-mix(in srgb, var(--monitor-accent) 3%, var(--monitor-surface)) 0%,
-    var(--monitor-surface) 100%
-  );
-  box-shadow: var(--shadow);
+  border: 1px solid color-mix(in srgb, var(--monitor-line-strong) 58%, var(--monitor-line));
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--floating-surface, #fffdf9) 34%, var(--monitor-surface));
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, var(--floating-surface, #fffdf9) 48%, transparent),
+    0 8px 18px -18px rgba(45, 42, 38, 0.34);
 }
 
 .accountOverviewCardExpanded {
-  border-color: color-mix(in srgb, var(--monitor-accent) 26%, var(--monitor-line));
+  border-color: color-mix(in srgb, var(--monitor-accent) 28%, var(--monitor-line-strong));
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, var(--floating-surface, #fffdf9) 52%, transparent),
+    0 10px 20px -18px rgba(45, 42, 38, 0.38),
+    0 0 0 1px color-mix(in srgb, var(--monitor-accent) 8%, transparent);
 }
 
 .accountOverviewCardFocused {
   border-color: color-mix(in srgb, var(--monitor-accent) 42%, var(--monitor-line));
   box-shadow:
     0 0 0 1px color-mix(in srgb, var(--monitor-accent) 18%, transparent),
+    0 12px 24px -18px rgba(45, 42, 38, 0.42),
     var(--shadow-lg);
 }
 
@@ -2029,7 +2070,7 @@
   padding: 16px;
   border: 1px solid color-mix(in srgb, var(--monitor-line) 82%, transparent);
   border-radius: 12px;
-  background: color-mix(in srgb, var(--monitor-surface-elevated) 86%, var(--monitor-surface));
+  background: color-mix(in srgb, var(--monitor-surface-muted) 34%, var(--monitor-surface));
 }
 
 .accountScopeText {
@@ -2291,7 +2332,7 @@
   padding: 12px;
   border: 1px solid color-mix(in srgb, var(--monitor-line) 80%, transparent);
   border-radius: 10px;
-  background: color-mix(in srgb, var(--monitor-surface-elevated) 88%, var(--monitor-surface));
+  background: color-mix(in srgb, var(--monitor-surface-elevated) 80%, var(--monitor-surface));
 }
 
 .accountOverviewMetricLabel {
@@ -3600,25 +3641,40 @@
 @container monitoring-page (max-width: 900px) {
   .usageTrendHeader,
   .usageTrendCollapsed {
-    align-items: flex-start;
-    flex-direction: column;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: start;
+    gap: 10px 12px;
   }
 
   .usageTrendActions {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-column: 1 / -1;
     width: 100%;
-    justify-content: flex-start;
+    align-items: center;
+    justify-content: stretch;
   }
 
+  .mobileHeaderHideButton {
+    display: inline-flex;
+  }
+
+  .usageTrendHeader > .usageTrendActions > .usageTrendHideButton {
+    display: none;
+  }
+
+  .usageTrendHeader .usageTrendCopy p {
+    grid-column: 1 / -1;
+  }
+
+  .timeRangeControl,
   .usageTrendRangeControl {
     flex: 1 1 auto;
   }
 
   .usageTrendApiKeySelect {
     width: 150px;
-  }
-
-  .usageTrendHideButton {
-    flex: 0 0 auto;
   }
 
   .usageTrendInsightsGrid,
@@ -3673,31 +3729,33 @@
 
 @container monitoring-page (max-width: 680px) {
   .usageTrendActions {
-    align-items: stretch;
-    flex-direction: column;
+    grid-template-columns: minmax(0, 1fr) 132px;
+    align-items: center;
     overflow-x: visible;
   }
 
+  .timeRangeControl,
   .usageTrendRangeControl {
-    flex: 0 0 auto;
     width: 100%;
+    min-width: 0;
     overflow-x: auto;
     scrollbar-width: none;
   }
 
+  .timeRangeControl::-webkit-scrollbar,
   .usageTrendRangeControl::-webkit-scrollbar {
     display: none;
   }
 
+  .timeRangeButton,
   .usageTrendRangeButton {
     flex: 1 0 auto;
     min-width: 58px;
     padding: 0 12px;
   }
 
-  .usageTrendApiKeySelect,
-  .usageTrendHideButton {
-    width: 100%;
+  .usageTrendApiKeySelect {
+    width: 132px;
   }
 
   .usageTrendChartCard {
@@ -3720,6 +3778,52 @@
     justify-content: flex-start;
   }
 
+  .accountStatsToolbar {
+    align-items: stretch;
+    flex-direction: column;
+    flex-wrap: nowrap;
+  }
+
+  .accountStatsFilters {
+    display: grid;
+    grid-template-columns: minmax(112px, 1fr) minmax(104px, 0.9fr) minmax(96px, 0.8fr);
+    gap: 8px;
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    scrollbar-width: none;
+  }
+
+  .accountStatsFilters::-webkit-scrollbar {
+    display: none;
+  }
+
+  .accountStatsSearchInput,
+  .accountStatsSelect {
+    width: 100%;
+  }
+
+  .accountStatsToolbar > .rankingMetricSwitch {
+    width: max-content;
+    max-width: 100%;
+    overflow-x: auto;
+    justify-content: flex-start;
+    scrollbar-width: none;
+  }
+
+  .accountStatsToolbar > .rankingMetricSwitch::-webkit-scrollbar {
+    display: none;
+  }
+
+  .accountStatsToolbar > .rankingMetricSwitch .rankingMetricButton {
+    flex: 0 0 auto;
+    min-width: 58px;
+    padding: 0 12px;
+  }
+
+  .accountStatsClearButton {
+    display: none;
+  }
+
   .accountOverviewCardGrid {
     grid-template-columns: 1fr;
   }
@@ -3735,7 +3839,13 @@
   }
 
   .trendSummaryStrip {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: repeat(4, minmax(96px, 1fr));
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .trendSummaryStrip::-webkit-scrollbar {
+    display: none;
   }
 
   .tokenDistributionLegend {
@@ -3787,9 +3897,18 @@
     padding: 0 9px;
   }
 
-  .trendSummaryStrip,
-  .tokenTypeSummaryGrid {
-    grid-template-columns: 1fr;
+  .tokenDistributionHeader {
+    flex-direction: row;
+    align-items: flex-start;
+  }
+
+  .tokenCostBadge {
+    min-width: 98px;
+    padding: 7px 9px;
+  }
+
+  .trendSummaryStrip {
+    grid-template-columns: repeat(4, minmax(92px, 1fr));
   }
 
   .usageTrendChartCard {

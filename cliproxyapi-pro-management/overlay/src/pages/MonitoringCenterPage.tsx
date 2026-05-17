@@ -168,32 +168,55 @@ const getNextAccountStatusBlockIndex = (currentIndex: number, key: string, count
 
 const formatAccountOverviewScopeText = (rangeLabel: string) => `统计范围：${rangeLabel}`;
 
-const buildAccountStatusData = (pattern: boolean[], lastSeenAt: number): AccountStatusData => {
-  const normalized = pattern.slice(-ACCOUNT_STATUS_BLOCK_COUNT);
-  const emptyBlockCount = Math.max(0, ACCOUNT_STATUS_BLOCK_COUNT - normalized.length);
-  const blocks = [
-    ...Array.from({ length: emptyBlockCount }, () => null),
-    ...normalized,
-  ];
-  const anchorEnd = Number.isFinite(lastSeenAt) ? lastSeenAt : Date.now();
-  const windowStart = anchorEnd - ACCOUNT_STATUS_BLOCK_COUNT * ACCOUNT_STATUS_BLOCK_DURATION_MS;
+const buildAccountStatusRange = (rows: MonitoringEventRow[], range: MonitoringTimeRange, nowMs = Date.now()): AccountStatusRange => {
+  if (range !== 'all') {
+    return {
+      startTime: getRangeStartMs(range, nowMs),
+      endTime: nowMs,
+    };
+  }
+
+  const minTimestamp = rows.reduce(
+    (min, row) => Math.min(min, row.timestampMs),
+    Number.POSITIVE_INFINITY
+  );
+  return {
+    startTime: Number.isFinite(minTimestamp) ? minTimestamp : nowMs - ACCOUNT_STATUS_BLOCK_COUNT * ACCOUNT_STATUS_BLOCK_DURATION_MS,
+    endTime: nowMs,
+  };
+};
+
+const buildAccountStatusData = (rows: MonitoringEventRow[], range: AccountStatusRange): AccountStatusData => {
+  const duration = Math.max(range.endTime - range.startTime, ACCOUNT_STATUS_BLOCK_DURATION_MS);
+  const blockDuration = duration / ACCOUNT_STATUS_BLOCK_COUNT;
+  const blockDetails = Array.from({ length: ACCOUNT_STATUS_BLOCK_COUNT }, (_, index) => ({
+    success: 0,
+    failure: 0,
+    rate: -1,
+    startTime: range.startTime + index * blockDuration,
+    endTime: index === ACCOUNT_STATUS_BLOCK_COUNT - 1 ? range.endTime : range.startTime + (index + 1) * blockDuration,
+  }));
   let totalSuccess = 0;
   let totalFailure = 0;
 
-  const blockDetails = blocks.map((item, index) => {
-    const success = item === true ? 1 : 0;
-    const failure = item === false ? 1 : 0;
-    const total = success + failure;
-    totalSuccess += success;
-    totalFailure += failure;
+  rows.forEach((row) => {
+    if (row.timestampMs < range.startTime || row.timestampMs > range.endTime) return;
+    const index = Math.min(
+      ACCOUNT_STATUS_BLOCK_COUNT - 1,
+      Math.max(0, Math.floor((row.timestampMs - range.startTime) / blockDuration))
+    );
+    if (row.failed) {
+      blockDetails[index].failure += 1;
+      totalFailure += 1;
+    } else {
+      blockDetails[index].success += 1;
+      totalSuccess += 1;
+    }
+  });
 
-    return {
-      success,
-      failure,
-      rate: total > 0 ? success / total : -1,
-      startTime: windowStart + index * ACCOUNT_STATUS_BLOCK_DURATION_MS,
-      endTime: windowStart + (index + 1) * ACCOUNT_STATUS_BLOCK_DURATION_MS,
-    };
+  blockDetails.forEach((detail) => {
+    const total = detail.success + detail.failure;
+    detail.rate = total > 0 ? detail.success / total : -1;
   });
   const total = totalSuccess + totalFailure;
 
@@ -227,6 +250,7 @@ type TokenDistributionPoint = {
   outputTokens: number;
   reasoningTokens: number;
   cachedTokens: number;
+  totalCost: number;
 };
 
 type AccountHealthTone = 'good' | 'warn' | 'bad';
@@ -235,6 +259,11 @@ type AccountStatusBlockDetail = {
   success: number;
   failure: number;
   rate: number;
+  startTime: number;
+  endTime: number;
+};
+
+type AccountStatusRange = {
   startTime: number;
   endTime: number;
 };
@@ -657,6 +686,7 @@ const buildTokenDistributionPoints = (rows: MonitoringEventRow[], range: Monitor
       outputTokens: 0,
       reasoningTokens: 0,
       cachedTokens: 0,
+      totalCost: 0,
     };
 
     existing.requests += row.statsIncluded ? 1 : 0;
@@ -665,6 +695,7 @@ const buildTokenDistributionPoints = (rows: MonitoringEventRow[], range: Monitor
     existing.outputTokens += row.outputTokens;
     existing.reasoningTokens += row.reasoningTokens;
     existing.cachedTokens += row.cachedTokens;
+    existing.totalCost += row.totalCost;
     grouped.set(key, existing);
   });
 
@@ -847,6 +878,9 @@ function UsageTrendHeader({
         <h2>使用趋势</h2>
         <p>{`基于选定时间范围内 ${formatCompactNumber(totalCalls)} 条请求日志自动聚合。`}</p>
       </div>
+      <button type="button" className={`${styles.rankingMetricButton} ${styles.usageTrendHideButton} ${styles.mobileHeaderHideButton}`} onClick={onHide}>
+        隐藏分析
+      </button>
       <div className={styles.usageTrendActions}>
         <div className={`${styles.rankingMetricSwitch} ${styles.timeRangeControl}`}>
           {TIME_RANGE_OPTIONS.map((option) => (
@@ -1175,9 +1209,11 @@ function UsageTrendPanel({
 function TokenDistributionPanel({
   points,
   emptyText,
+  hasPrices,
 }: {
   points: TokenDistributionPoint[];
   emptyText: string;
+  hasPrices: boolean;
 }) {
   const totals = points.reduce(
     (sum, point) => ({
@@ -1187,8 +1223,9 @@ function TokenDistributionPanel({
       outputTokens: sum.outputTokens + point.outputTokens,
       reasoningTokens: sum.reasoningTokens + point.reasoningTokens,
       cachedTokens: sum.cachedTokens + point.cachedTokens,
+      totalCost: sum.totalCost + point.totalCost,
     }),
-    { requests: 0, totalTokens: 0, inputTokens: 0, outputTokens: 0, reasoningTokens: 0, cachedTokens: 0 }
+    { requests: 0, totalTokens: 0, inputTokens: 0, outputTokens: 0, reasoningTokens: 0, cachedTokens: 0, totalCost: 0 }
   );
   const tokenMinutes = Math.max(points.length * 60, 1);
   const rpm = totals.requests / tokenMinutes;
@@ -1207,10 +1244,14 @@ function TokenDistributionPanel({
 
   return (
     <Card className={`${styles.usageTrendChartCard} ${styles.tokenDistributionCard}`}>
-      <div className={styles.trendCardHeader}>
+      <div className={`${styles.trendCardHeader} ${styles.tokenDistributionHeader}`}>
         <div>
           <h3>Token 统计</h3>
           <p>按请求规模和消耗类型查看 Token 分布。</p>
+        </div>
+        <div className={styles.tokenCostBadge}>
+          <span>Token 花费</span>
+          <strong>{hasPrices ? formatUsd(totals.totalCost) : '--'}</strong>
         </div>
       </div>
       {hasData ? (
@@ -1688,7 +1729,7 @@ function AccountHealthStatusPanel({
     <section className={styles.accountOverviewStatusSection}>
       <div className={styles.accountSectionHeader}>
         <strong>健康状态</strong>
-        <span className={styles.accountSectionInfo} title="基于近期请求成功率与错误情况计算">
+        <span className={styles.accountSectionInfo} title="基于当前统计范围内的请求成功率与错误情况计算">
           i
         </span>
       </div>
@@ -2087,6 +2128,11 @@ function AccountStatsPanel({
   const safePageIndex = Math.min(cardPage, totalPages - 1);
   const visibleRows = filteredRows.slice(safePageIndex * itemsPerPage, (safePageIndex + 1) * itemsPerPage);
 
+  const accountStatusRange = useMemo(
+    () => buildAccountStatusRange(rows.flatMap((row) => row.rows), range),
+    [rows, range]
+  );
+
   useEffect(() => {
     setCardPage(0);
   }, [accountSearch, accountProviderFilter, accountHealthFilter, metric, range, itemsPerPage]);
@@ -2098,6 +2144,9 @@ function AccountStatsPanel({
           <h2>账号统计</h2>
           <p>按账号查看健康状态、Token 使用与近期请求活跃度。</p>
         </div>
+        <button type="button" className={`${styles.rankingMetricButton} ${styles.usageTrendHideButton} ${styles.mobileHeaderHideButton}`} onClick={onHide}>
+          隐藏分析
+        </button>
         <div className={styles.usageTrendActions}>
           <div className={`${styles.rankingMetricSwitch} ${styles.timeRangeControl}`}>
             {TIME_RANGE_OPTIONS.map((option) => (
@@ -2181,7 +2230,7 @@ function AccountStatsPanel({
           <>
             <div ref={gridRef} className={styles.accountOverviewCardGrid}>
               {visibleRows.map((row) => {
-                const statusData = buildAccountStatusData(row.recentPattern, row.lastSeenAt);
+                const statusData = buildAccountStatusData(row.rows, accountStatusRange);
                 return (
                   <AccountOverviewCard
                     key={row.id}
@@ -2309,7 +2358,7 @@ export function MonitoringCenterPage() {
     error: usageError,
     modelPrices,
     setModelPrices,
-    loadUsage,
+    refreshUsage,
   } = useUsageData();
 
   const {
@@ -2328,12 +2377,12 @@ export function MonitoringCenterPage() {
   });
 
   const refreshAll = useCallback(async () => {
-    await Promise.all([loadUsage(), refreshMeta(false)]);
-  }, [loadUsage, refreshMeta]);
+    await Promise.all([refreshUsage(), refreshMeta(false)]);
+  }, [refreshUsage, refreshMeta]);
 
   const refreshUsageOnly = useCallback(async () => {
-    await loadUsage();
-  }, [loadUsage]);
+    await refreshUsage();
+  }, [refreshUsage]);
 
   const handleExportUsage = useCallback(async () => {
     if (connectionStatus !== 'connected') {
@@ -2906,6 +2955,7 @@ export function MonitoringCenterPage() {
             <TokenDistributionPanel
               points={tokenDistributionPoints}
               emptyText={t('monitoring.no_data')}
+              hasPrices={hasPrices}
             />
           </div>
         </section>

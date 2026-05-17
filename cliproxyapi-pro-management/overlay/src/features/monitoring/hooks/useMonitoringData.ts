@@ -389,6 +389,7 @@ export type MonitoringAccountRow = {
   averageLatencyMs: number | null;
   lastSeenAt: number;
   recentPattern: boolean[];
+  rows: MonitoringEventRow[];
   models: MonitoringAccountModelSpendRow[];
 };
 
@@ -907,6 +908,7 @@ export const buildAccountRows = (
       averageLatencyMs: item.latencyCount > 0 ? item.latencySum / item.latencyCount : null,
       lastSeenAt: item.lastSeenAt,
       recentPattern: buildRecentPattern(item.rows),
+      rows: item.rows,
       models: Array.from(item.modelMap.values())
         .map((model) => ({
           ...model,

@@ -21,6 +21,7 @@ class QuotaPersistenceMiddleware {
   private syncedVersions = new Map<string, number>();
   private loadedThrough = 0;
   private reloadRequestedAt = 0;
+  private preloadPromise: Promise<void> | null = null;
   private ensureFreshPromise: Promise<void> | null = null;
 
   /**
@@ -41,7 +42,7 @@ class QuotaPersistenceMiddleware {
     console.log('QuotaPersistenceMiddleware: Starting...');
 
     // Preload cache first
-    this.preloadCache().then(() => {
+    this.runPreload().then(() => {
       console.log('QuotaPersistenceMiddleware: Cache preloaded');
     });
 
@@ -162,15 +163,26 @@ class QuotaPersistenceMiddleware {
     if (this.ensureFreshPromise) return this.ensureFreshPromise;
 
     this.ensureFreshPromise = (async () => {
+      await this.preloadPromise;
       const stats = await sqliteQuotaCache.getStats();
       const targetUpdatedAt = Math.max(this.reloadRequestedAt, stats.updatedAt);
       if (targetUpdatedAt <= 0 || targetUpdatedAt <= this.loadedThrough) return;
-      await this.preloadCache(targetUpdatedAt);
+      await this.runPreload(targetUpdatedAt);
     })().finally(() => {
       this.ensureFreshPromise = null;
     });
 
     return this.ensureFreshPromise;
+  }
+
+  private runPreload(loadedAt = Date.now()) {
+    if (this.preloadPromise) return this.preloadPromise;
+
+    this.preloadPromise = this.preloadCache(loadedAt).finally(() => {
+      this.preloadPromise = null;
+    });
+
+    return this.preloadPromise;
   }
 
   markStale(updatedAt = Date.now()) {

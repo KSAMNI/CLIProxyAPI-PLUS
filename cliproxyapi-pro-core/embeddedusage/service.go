@@ -65,9 +65,6 @@ func (s *Service) collect(ctx context.Context) {
 		default:
 		}
 
-		redisqueue.SetEnabled(true)
-		redisqueue.SetUsageStatisticsEnabled(true)
-
 		items := redisqueue.PopOldest(s.cfg.BatchSize)
 		if len(items) == 0 {
 			select {
