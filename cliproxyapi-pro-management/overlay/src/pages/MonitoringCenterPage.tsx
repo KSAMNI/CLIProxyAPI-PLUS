@@ -100,6 +100,19 @@ const getAccountStatusColor = (rate: number) => {
   return `rgb(${r}, ${g}, ${b})`;
 };
 
+const buildApiKeyFilterOptions = (rows: MonitoringEventRow[], allLabel = '全部密钥') => [
+  { value: 'all', label: allLabel },
+  ...Array.from(
+    new Map(
+      rows
+        .filter((row) => row.clientApiKey.hash && row.clientApiKey.hash !== '-')
+        .map((row) => [row.clientApiKey.hash, row.clientApiKey.masked])
+    ).entries()
+  )
+    .sort((left, right) => left[1].localeCompare(right[1]))
+    .map(([value, label]) => ({ value, label })),
+];
+
 const formatStatusRate = (rate: number) => {
   const rounded = rate.toFixed(1);
   return `${rounded.endsWith('.0') ? rounded.slice(0, -2) : rounded}%`;
@@ -244,6 +257,8 @@ type RealtimeLogRow = MonitoringEventRow & {
   successRate: number;
   streamKey: string;
   recentPattern: boolean[];
+  recentSuccessCount: number;
+  recentFailureCount: number;
 };
 
 type UsageImportResult = {
@@ -482,11 +497,6 @@ const getProgressWidth = (value: number) => {
   return `${Math.max(value * 100, 1.5)}%`;
 };
 
-const getChartRatio = (value: number, max: number) => {
-  if (max <= 0 || value <= 0) return 0;
-  return Math.max(Math.min(value / max, 1), 0.02);
-};
-
 const getChartAxisLabels = <T extends { key: string; label: string }>(points: T[]) => {
   if (points.length <= 10) {
     return points.map((point, index) => ({ key: point.key, label: point.label, index }));
@@ -564,8 +574,8 @@ const buildFilledTrendBuckets = (range: MonitoringTimeRange, nowMs: number) => {
   return buckets;
 };
 
-const buildTimeBucketMeta = (rows: MonitoringEventRow[]) => {
-  const useHourly = new Set(rows.map((row) => row.dayKey)).size <= 1;
+const buildTimeBucketMeta = (range: MonitoringTimeRange) => {
+  const useHourly = range === 'today';
   return {
     useHourly,
     getKey: (row: MonitoringEventRow) => (useHourly ? `${row.dayKey} ${row.hourLabel}` : row.dayKey),
@@ -607,7 +617,7 @@ const buildTrendPoints = (rows: MonitoringEventRow[], range: MonitoringTimeRange
   const nowMs = Date.now();
   const prefilled = buildFilledTrendBuckets(range, nowMs);
   const grouped = new Map<string, TrendPoint>(prefilled.map((point) => [point.key, point]));
-  const { getKey, getLabel } = buildTimeBucketMeta(rows);
+  const { getKey, getLabel } = buildTimeBucketMeta(range);
 
   rows.forEach((row) => {
     const key = getKey(row);
@@ -631,9 +641,9 @@ const buildTrendPoints = (rows: MonitoringEventRow[], range: MonitoringTimeRange
   return Array.from(grouped.values()).sort((left, right) => left.key.localeCompare(right.key)).slice(-24);
 };
 
-const buildTokenDistributionPoints = (rows: MonitoringEventRow[]): TokenDistributionPoint[] => {
+const buildTokenDistributionPoints = (rows: MonitoringEventRow[], range: MonitoringTimeRange = 'all'): TokenDistributionPoint[] => {
   const grouped = new Map<string, TokenDistributionPoint>();
-  const { getKey, getLabel } = buildTimeBucketMeta(rows);
+  const { getKey, getLabel } = buildTimeBucketMeta(range);
 
   rows.forEach((row) => {
     const key = getKey(row);
@@ -799,6 +809,8 @@ const buildRealtimeLogRows = (rows: MonitoringEventRow[]): RealtimeLogRow[] => {
       requestCount: next.total,
       successRate: next.total > 0 ? next.success / next.total : 1,
       recentPattern: nextPattern,
+      recentSuccessCount: nextPattern.filter(Boolean).length,
+      recentFailureCount: nextPattern.filter((item) => !item).length,
     } satisfies RealtimeLogRow;
   });
 
@@ -813,13 +825,19 @@ const buildRealtimeLogRows = (rows: MonitoringEventRow[]): RealtimeLogRow[] => {
 function UsageTrendHeader({
   range,
   totalCalls,
+  apiKeyFilter,
+  apiKeyOptions,
   onRangeChange,
+  onApiKeyFilterChange,
   onHide,
   t,
 }: {
   range: MonitoringTimeRange;
   totalCalls: number;
+  apiKeyFilter: string;
+  apiKeyOptions: Array<{ value: string; label: string }>;
   onRangeChange: (range: MonitoringTimeRange) => void;
+  onApiKeyFilterChange: (value: string) => void;
   onHide: () => void;
   t: TFunction;
 }) {
@@ -830,18 +848,26 @@ function UsageTrendHeader({
         <p>{`基于选定时间范围内 ${formatCompactNumber(totalCalls)} 条请求日志自动聚合。`}</p>
       </div>
       <div className={styles.usageTrendActions}>
-        <div className={`${styles.rankingMetricSwitch} ${styles.usageTrendRangeControl}`}>
+        <div className={`${styles.rankingMetricSwitch} ${styles.timeRangeControl}`}>
           {TIME_RANGE_OPTIONS.map((option) => (
             <button
               key={option.value}
               type="button"
-              className={`${styles.rankingMetricButton} ${styles.usageTrendRangeButton} ${range === option.value ? styles.rankingMetricButtonActive : ''}`}
+              className={`${styles.rankingMetricButton} ${styles.timeRangeButton} ${range === option.value ? styles.rankingMetricButtonActive : ''}`}
               onClick={() => onRangeChange(option.value)}
             >
               {t(option.labelKey)}
             </button>
           ))}
         </div>
+        <Select
+          className={styles.usageTrendApiKeySelect}
+          value={apiKeyFilter}
+          options={apiKeyOptions}
+          onChange={onApiKeyFilterChange}
+          ariaLabel="按 API 密钥筛选使用趋势"
+          fullWidth={false}
+        />
         <button type="button" className={`${styles.rankingMetricButton} ${styles.usageTrendHideButton}`} onClick={onHide}>
           隐藏分析
         </button>
@@ -886,38 +912,53 @@ function UsageTrendPanel({
   hasPrices: boolean;
   emptyText: string;
 }) {
-  const chartPoints = points.slice(-24);
+  const chartPoints = points.slice(-30);
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
-  const plot = { left: 46, top: 22, right: 666, bottom: 278 };
-  const tokenMax = Math.max(...chartPoints.map((point) => point.tokens), 1);
-  const requestMax = Math.max(...chartPoints.map((point) => point.requests), 1);
-  const costMax = Math.max(...chartPoints.map((point) => point.cost), 1);
+  const svgRef = useRef<SVGSVGElement | null>(null);
+  const chartViewBoxHeight = 310;
+  const [chartViewBoxWidth, setChartViewBoxWidth] = useState(700);
+  const rightLabelX = chartViewBoxWidth - 8;
+  const plot = {
+    left: 36,
+    top: 38,
+    right: rightLabelX - 144,
+    costAxis: rightLabelX - 88,
+    tokenAxis: rightLabelX - 42,
+    tokenLabel: rightLabelX,
+    bottom: 278,
+  };
+  const requestMax = Math.max(...chartPoints.map((point) => point.requests), 0);
+  const tokenMax = Math.max(...chartPoints.map((point) => point.tokens), 0);
+  const costMax = Math.max(...chartPoints.map((point) => point.cost), 0);
+  const requestAxisMax = Math.max(10, Math.ceil(requestMax * 1.1));
+  const tokenAxisMax = Math.max(1000, Math.ceil(tokenMax * 1.1));
+  const costAxisMax = Math.max(0.1, costMax * 1.1);
   const series = [
     {
       key: 'tokens',
       label: 'Token',
       color: '#7c3aed',
+      axis: 'tokens',
       getValue: (point: TrendPoint) => point.tokens,
-      max: tokenMax,
       format: (value: number) => formatCompactNumber(value),
     },
     {
       key: 'requests',
       label: '请求',
       color: '#2563eb',
+      axis: 'requests',
       getValue: (point: TrendPoint) => point.requests,
-      max: requestMax,
       format: (value: number) => formatCompactNumber(value),
     },
     {
       key: 'cost',
       label: '费用',
-      color: '#059669',
+      color: '#047857',
+      axis: 'cost',
       getValue: (point: TrendPoint) => point.cost,
-      max: costMax,
       format: (value: number) => (hasPrices ? formatUsd(value) : '--'),
     },
-  ];
+  ] as const;
   const visibleSeries = hasPrices ? series : series.filter((item) => item.key !== 'cost');
   const totals = chartPoints.reduce(
     (sum, point) => ({
@@ -944,14 +985,23 @@ function UsageTrendPanel({
     { key: 'tpm', label: 'TPM', value: formatCompactNumber(totals.tokens / trendMinutes) },
     { key: 'errorRate', label: '错误率', value: formatPercent(totals.requests > 0 ? totals.failures / totals.requests : 0) },
   ];
+  const axisTicks = [0, 0.25, 0.5, 0.75, 1];
+  const getAxisMax = (axis: typeof series[number]['axis']) => {
+    if (axis === 'tokens') return tokenAxisMax;
+    if (axis === 'cost') return costAxisMax;
+    return requestAxisMax;
+  };
   const getX = (index: number) => chartPoints.length <= 1
     ? (plot.left + plot.right) / 2
     : plot.left + (index / (chartPoints.length - 1)) * (plot.right - plot.left);
-  const getY = (value: number, max: number) => plot.bottom - getChartRatio(value, max) * (plot.bottom - plot.top);
+  const getY = (value: number, axis: typeof series[number]['axis']) => {
+    const max = getAxisMax(axis);
+    return plot.bottom - Math.max(Math.min(value / max, 1), 0) * (plot.bottom - plot.top);
+  };
   const buildPath = (item: typeof series[number]) => {
     const coords = chartPoints.map((point, index) => ({
       x: getX(index),
-      y: getY(item.getValue(point), item.max),
+      y: getY(item.getValue(point), item.axis),
     }));
     if (coords.length === 0) return '';
     if (coords.length === 1) return `M ${coords[0].x} ${coords[0].y}`;
@@ -961,10 +1011,31 @@ function UsageTrendPanel({
       return `${path} C ${midX} ${previous.y}, ${midX} ${point.y}, ${point.x} ${point.y}`;
     }, `M ${coords[0].x} ${coords[0].y}`);
   };
+  const buildAreaPath = (item: typeof series[number]) => {
+    const path = buildPath(item);
+    return path ? `${path} L ${getX(chartPoints.length - 1)} ${plot.bottom} L ${getX(0)} ${plot.bottom} Z` : '';
+  };
   const labels = getChartAxisLabels(chartPoints);
   const hoveredPoint = hoveredIndex === null ? null : chartPoints[hoveredIndex];
   const hoveredX = hoveredIndex === null ? 0 : getX(hoveredIndex);
   const tooltipX = Math.min(Math.max(hoveredX - 84, plot.left + 8), plot.right - 168);
+  const formatCostAxisValue = (value: number) => `$${formatCompactNumber(value)}`;
+
+  useEffect(() => {
+    const svg = svgRef.current;
+    if (!svg) return;
+
+    const updateViewBoxWidth = () => {
+      const rect = svg.getBoundingClientRect();
+      const nextWidth = Math.max(700, Math.round((rect.width / Math.max(rect.height, 1)) * chartViewBoxHeight));
+      setChartViewBoxWidth((current) => current === nextWidth ? current : nextWidth);
+    };
+
+    updateViewBoxWidth();
+    const observer = new ResizeObserver(updateViewBoxWidth);
+    observer.observe(svg);
+    return () => observer.disconnect();
+  }, [chartViewBoxHeight]);
 
   return (
     <Card className={`${styles.usageTrendChartCard} ${styles.usageTrendLineCard}`}>
@@ -992,37 +1063,59 @@ function UsageTrendPanel({
               </div>
             ))}
           </div>
-          <svg className={styles.usageTrendSvg} viewBox="0 0 700 300" role="img" aria-label="用量趋势图">
+          <svg ref={svgRef} className={styles.usageTrendSvg} viewBox={`0 0 ${chartViewBoxWidth} ${chartViewBoxHeight}`} role="img" aria-label="用量趋势图">
             <defs>
-              <linearGradient id="usageTrendFill" x1="0" x2="0" y1="0" y2="1">
-                <stop offset="0%" stopColor="#7c3aed" stopOpacity="0.14" />
-                <stop offset="100%" stopColor="#7c3aed" stopOpacity="0" />
+              <linearGradient id="usageTrendTokensFill" x1="0" x2="0" y1="0" y2="1">
+                <stop offset="5%" stopColor="#7c3aed" stopOpacity="0.24" />
+                <stop offset="95%" stopColor="#7c3aed" stopOpacity="0" />
+              </linearGradient>
+              <linearGradient id="usageTrendRequestsFill" x1="0" x2="0" y1="0" y2="1">
+                <stop offset="5%" stopColor="#2563eb" stopOpacity="0.16" />
+                <stop offset="95%" stopColor="#2563eb" stopOpacity="0" />
+              </linearGradient>
+              <linearGradient id="usageTrendCostFill" x1="0" x2="0" y1="0" y2="1">
+                <stop offset="5%" stopColor="#047857" stopOpacity="0.24" />
+                <stop offset="95%" stopColor="#047857" stopOpacity="0" />
               </linearGradient>
             </defs>
-            {[0, 0.25, 0.5, 0.75, 1].map((tick) => {
+            {axisTicks.map((tick) => {
               const y = plot.bottom - tick * (plot.bottom - plot.top);
               return (
                 <g key={tick}>
-                  <line className={styles.chartGridLine} x1={plot.left} x2={plot.right} y1={y} y2={y} />
-                  <text className={styles.chartAxisLabel} x="36" y={y + 4}>{`${Math.round(tick * 100)}%`}</text>
+                  {tick > 0 ? <line className={styles.chartGridLine} x1={plot.left} x2={plot.costAxis} y1={y} y2={y} /> : null}
+                  <text className={`${styles.chartAxisLabel} ${styles.chartAxisLabelRequests}`} x={plot.left - 12} y={y + 4}>
+                    {formatCompactNumber(requestAxisMax * tick)}
+                  </text>
+                  {hasPrices ? (
+                    <text className={`${styles.chartAxisLabel} ${styles.chartAxisLabelCost}`} x={plot.costAxis - 12} y={y + 4}>
+                      {formatCostAxisValue(costAxisMax * tick)}
+                    </text>
+                  ) : null}
+                  <text className={`${styles.chartAxisLabel} ${styles.chartAxisLabelTokens}`} x={plot.tokenLabel} y={y + 4}>
+                    {formatCompactNumber(tokenAxisMax * tick)}
+                  </text>
                 </g>
               );
             })}
-            <line className={styles.chartAxisBase} x1={plot.left} x2={plot.right} y1={plot.bottom} y2={plot.bottom} />
-            {visibleSeries.map((item, index) => {
+            <line className={styles.chartAxisBase} x1={plot.left} x2={plot.costAxis} y1={plot.bottom} y2={plot.bottom} />
+            <line className={styles.chartYAxisRequests} x1={plot.left} x2={plot.left} y1={plot.top} y2={plot.bottom} />
+            {hasPrices ? <line className={styles.chartYAxisCost} x1={plot.costAxis} x2={plot.costAxis} y1={plot.top} y2={plot.bottom} /> : null}
+            <line className={styles.chartYAxisTokens} x1={plot.tokenAxis} x2={plot.tokenAxis} y1={plot.top} y2={plot.bottom} />
+            {visibleSeries.map((item) => {
               const path = buildPath(item);
-              const area = index === 0 && path
-                ? `${path} L ${getX(chartPoints.length - 1)} ${plot.bottom} L ${getX(0)} ${plot.bottom} Z`
-                : '';
+              const area = buildAreaPath(item);
               return (
                 <g key={item.key}>
-                  {area ? <path className={styles.trendAreaFill} d={area} /> : null}
+                  {area ? <path className={styles.trendAreaFill} d={area} fill={`url(#usageTrend${item.key[0].toUpperCase()}${item.key.slice(1)}Fill)`} /> : null}
                   <path className={styles.trendSeriesLine} d={path} stroke={item.color} />
                 </g>
               );
             })}
             {labels.map((item) => (
-              <text key={item.key} className={styles.chartXAxisLabel} x={getX(item.index)} y="286">{item.label}</text>
+              <g key={item.key}>
+                <line className={styles.chartXAxisTick} x1={getX(item.index)} x2={getX(item.index)} y1={plot.bottom} y2={plot.bottom + 7} />
+                <text className={styles.chartXAxisLabel} x={getX(item.index)} y="300">{item.label}</text>
+              </g>
             ))}
             {chartPoints.map((point, index) => {
               const x = getX(index);
@@ -1037,36 +1130,38 @@ function UsageTrendPanel({
                   onBlur={() => setHoveredIndex(null)}
                   tabIndex={0}
                 >
-                  <rect x={Math.max(plot.left, x - 16)} y={plot.top - 10} width="32" height={plot.bottom - plot.top + 24} fill="transparent" />
+                  <rect x={Math.max(plot.left, x - 14)} y={plot.top - 10} width="28" height={plot.bottom - plot.top + 26} fill="transparent" />
                   {isHovered ? <line className={styles.trendHoverGuide} x1={x} x2={x} y1={plot.top} y2={plot.bottom} /> : null}
-                  {visibleSeries.map((item) => (
+                  {isHovered ? visibleSeries.map((item) => (
                     <circle
                       key={item.key}
                       className={styles.trendSeriesDot}
                       cx={x}
-                      cy={getY(item.getValue(point), item.max)}
-                      r={isHovered ? 4.5 : 2.6}
+                      cy={getY(item.getValue(point), item.axis)}
+                      r={4.5}
                       stroke={item.color}
                     />
-                  ))}
+                  )) : null}
                 </g>
               );
             })}
             {hoveredPoint ? (
               <g className={styles.trendTooltipLayer}>
-                <rect x={tooltipX} y="86" width="168" height={hasPrices ? 118 : 92} rx="12" />
-                <text className={styles.trendTooltipTitle} x={tooltipX + 16} y="112">{hoveredPoint.label}</text>
+                <rect x={tooltipX} y="82" width="168" height={hasPrices ? 118 : 92} rx="12" />
+                <text className={styles.trendTooltipTitle} x={tooltipX + 16} y="108">{hoveredPoint.label}</text>
                 {visibleSeries.map((item, index) => (
-                  <text key={item.key} className={styles.trendTooltipMetric} x={tooltipX + 16} y={140 + index * 25} fill={item.color}>
+                  <text key={item.key} className={styles.trendTooltipMetric} x={tooltipX + 16} y={136 + index * 25} fill={item.color}>
                     {`${item.label}：${item.format(item.getValue(hoveredPoint))}`}
                   </text>
                 ))}
               </g>
             ) : null}
           </svg>
-          <div className={styles.trendLegend}>
+          <div className={styles.trendChartLegend}>
             {visibleSeries.map((item) => (
-              <span key={item.key} style={{ '--series-color': item.color } as CSSProperties}>{item.label}</span>
+              <span key={item.key} style={{ '--series-color': item.color } as CSSProperties}>
+                {item.label}
+              </span>
             ))}
           </div>
         </div>
@@ -2004,12 +2099,12 @@ function AccountStatsPanel({
           <p>按账号查看健康状态、Token 使用与近期请求活跃度。</p>
         </div>
         <div className={styles.usageTrendActions}>
-          <div className={`${styles.rankingMetricSwitch} ${styles.usageTrendRangeControl}`}>
+          <div className={`${styles.rankingMetricSwitch} ${styles.timeRangeControl}`}>
             {TIME_RANGE_OPTIONS.map((option) => (
               <button
                 key={option.value}
                 type="button"
-                className={`${styles.rankingMetricButton} ${styles.usageTrendRangeButton} ${range === option.value ? styles.rankingMetricButtonActive : ''}`}
+                className={`${styles.rankingMetricButton} ${styles.timeRangeButton} ${range === option.value ? styles.rankingMetricButtonActive : ''}`}
                 onClick={() => onRangeChange(option.value)}
               >
                 {t(option.labelKey)}
@@ -2170,7 +2265,7 @@ function RecentPattern({
     <div className={containerClassName} role="img" aria-label={ariaLabel}>
       {normalized.map((item, index) => (
         <span
-          key={`${index}-${item ? 'success' : 'failed'}`}
+          key={index}
           className={`${barClassName} ${item ? styles.patternSuccess : styles.patternFailed}`}
           aria-hidden="true"
         />
@@ -2187,7 +2282,6 @@ export function MonitoringCenterPage() {
   const quotaStore = useQuotaStore((state) => state);
   const [timeRange, setTimeRange] = useState<MonitoringTimeRange>('today');
   const [searchInput, setSearchInput] = useState('');
-  const [selectedAccount, setSelectedAccount] = useState('all');
   const [selectedProvider, setSelectedProvider] = useState('all');
   const [selectedModel, setSelectedModel] = useState('all');
   const [selectedApiKey, setSelectedApiKey] = useState('all');
@@ -2199,12 +2293,11 @@ export function MonitoringCenterPage() {
   const [isImportingUsage, setIsImportingUsage] = useState(false);
   const importInputRef = useRef<HTMLInputElement | null>(null);
   const [accountQuotaStates, setAccountQuotaStates] = useState<Record<string, AccountQuotaState>>({});
-  const [usageTrendRange, setUsageTrendRange] = useState<MonitoringTimeRange>('today');
   const [isUsageTrendHidden, setIsUsageTrendHidden] = useState(false);
   const [modelRankingMetric, setModelRankingMetric] = useState<RankingMetric>('requests');
   const [apiKeyRankingMetric, setApiKeyRankingMetric] = useState<RankingMetric>('requests');
+  const [usageTrendApiKey, setUsageTrendApiKey] = useState('all');
   const [accountStatsMetric, setAccountStatsMetric] = useState<AccountSortMetric>('recent');
-  const [accountStatsRange, setAccountStatsRange] = useState<MonitoringTimeRange>('today');
   const [isAccountStatsHidden, setIsAccountStatsHidden] = useState(false);
   const accountQuotaStatesRef = useRef<Record<string, AccountQuotaState>>({});
   const accountQuotaRequestIdsRef = useRef<Record<string, number>>({});
@@ -2345,16 +2438,6 @@ export function MonitoringCenterPage() {
     [filteredRows, t]
   );
 
-  const accountOptions = useMemo(
-    () => [
-      { value: 'all', label: t('monitoring.filter_all_accounts') },
-      ...Array.from(new Map(filteredRows.map((row) => [row.account, row.account])).entries())
-        .sort((left, right) => left[1].localeCompare(right[1]))
-        .map(([value, label]) => ({ value, label })),
-    ],
-    [filteredRows, t]
-  );
-
   const modelOptions = useMemo(
     () => [
       { value: 'all', label: t('monitoring.filter_all_models') },
@@ -2366,21 +2449,7 @@ export function MonitoringCenterPage() {
     [filteredRows, t]
   );
 
-  const apiKeyOptions = useMemo(
-    () => [
-      { value: 'all', label: '全部密钥' },
-      ...Array.from(
-        new Map(
-          filteredRows
-            .filter((row) => row.apiKeyHash && row.apiKeyHash !== '-')
-            .map((row) => [row.apiKeyHash, row.apiKeyMasked || row.apiKeyHash])
-        ).entries()
-      )
-        .sort((left, right) => left[1].localeCompare(right[1]))
-        .map(([value, label]) => ({ value, label })),
-    ],
-    [filteredRows]
-  );
+  const apiKeyOptions = useMemo(() => buildApiKeyFilterOptions(filteredRows), [filteredRows]);
 
   const statusOptions = useMemo(
     () => [
@@ -2415,16 +2484,13 @@ export function MonitoringCenterPage() {
   const scopedRows = useMemo(
     () =>
       filteredRows.filter((row) => {
-        if (selectedAccount !== 'all' && row.account !== selectedAccount) {
-          return false;
-        }
         if (selectedProvider !== 'all' && row.provider !== selectedProvider) {
           return false;
         }
         if (selectedModel !== 'all' && row.model !== selectedModel) {
           return false;
         }
-        if (selectedApiKey !== 'all' && row.apiKeyHash !== selectedApiKey) {
+        if (selectedApiKey !== 'all' && row.clientApiKey.hash !== selectedApiKey) {
           return false;
         }
         if (selectedStatus === 'success' && row.failed) {
@@ -2435,7 +2501,7 @@ export function MonitoringCenterPage() {
         }
         return true;
       }),
-    [filteredRows, selectedAccount, selectedApiKey, selectedModel, selectedProvider, selectedStatus]
+    [filteredRows, selectedApiKey, selectedModel, selectedProvider, selectedStatus]
   );
 
   const topStatsRows = useMemo(() => allRows.filter((row) => row.statsIncluded), [allRows]);
@@ -2444,8 +2510,8 @@ export function MonitoringCenterPage() {
     [topStatsRows]
   );
   const trendStatsRows = useMemo(
-    () => filterRowsByRange(topStatsRows, usageTrendRange),
-    [topStatsRows, usageTrendRange]
+    () => filterRowsByRange(topStatsRows, timeRange),
+    [topStatsRows, timeRange]
   );
   const todayCost = useMemo(() => {
     const todayStart = new Date();
@@ -2467,23 +2533,36 @@ export function MonitoringCenterPage() {
       0
     );
   }, [topStatsRows]);
-  const usageTrendPoints = useMemo(() => buildTrendPoints(trendStatsRows, usageTrendRange), [trendStatsRows, usageTrendRange]);
-  const tokenDistributionPoints = useMemo(() => buildTokenDistributionPoints(trendStatsRows), [trendStatsRows]);
+  const usageTrendApiKeyOptions = useMemo(() => buildApiKeyFilterOptions(trendStatsRows), [trendStatsRows]);
+  const usageTrendScopedRows = useMemo(
+    () => usageTrendApiKey === 'all'
+      ? trendStatsRows
+      : trendStatsRows.filter((row) => row.clientApiKey.hash === usageTrendApiKey),
+    [usageTrendApiKey, trendStatsRows]
+  );
+  const usageTrendPoints = useMemo(() => buildTrendPoints(usageTrendScopedRows, timeRange), [usageTrendScopedRows, timeRange]);
+  const tokenDistributionPoints = useMemo(() => buildTokenDistributionPoints(usageTrendScopedRows, timeRange), [usageTrendScopedRows, timeRange]);
+  useEffect(() => {
+    if (usageTrendApiKey !== 'all' && !usageTrendApiKeyOptions.some((option) => option.value === usageTrendApiKey)) {
+      setUsageTrendApiKey('all');
+    }
+  }, [usageTrendApiKey, usageTrendApiKeyOptions]);
+
   const trendSummary = useMemo(() => buildMonitoringSummary(trendStatsRows), [trendStatsRows]);
   const topSummary = useMemo(() => buildMonitoringSummary(topStatsRows), [topStatsRows]);
   const todaySummary = useMemo(() => buildMonitoringSummary(todayStatsRows), [todayStatsRows]);
   const modelRankingRows = useMemo(
-    () => [...buildAccountRows(trendStatsRows, 'model')]
+    () => [...buildAccountRows(usageTrendScopedRows, 'model')]
       .sort((left, right) => (
         getRankingMetricValue(right, modelRankingMetric) - getRankingMetricValue(left, modelRankingMetric)
         || right.totalTokens - left.totalTokens
         || right.totalCalls - left.totalCalls
       )),
-    [modelRankingMetric, trendStatsRows]
+    [modelRankingMetric, usageTrendScopedRows]
   );
   const modelRankingMetricTotal = useMemo(
-    () => getRankingMetricTotalFromRows(trendStatsRows, modelRankingMetric),
-    [modelRankingMetric, trendStatsRows]
+    () => getRankingMetricTotalFromRows(usageTrendScopedRows, modelRankingMetric),
+    [modelRankingMetric, usageTrendScopedRows]
   );
   const apiKeyRankingRows = useMemo(
     () => [...buildAccountRows(trendStatsRows, 'apiKey')]
@@ -2500,8 +2579,8 @@ export function MonitoringCenterPage() {
     [apiKeyRankingMetric, trendStatsRows]
   );
   const accountStatsFilteredRows = useMemo(
-    () => filterRowsByRange(topStatsRows, accountStatsRange),
-    [topStatsRows, accountStatsRange]
+    () => filterRowsByRange(topStatsRows, timeRange),
+    [topStatsRows, timeRange]
   );
   const accountStatsRows = useMemo(
     () => [...buildAccountRows(accountStatsFilteredRows, 'account')]
@@ -2512,7 +2591,7 @@ export function MonitoringCenterPage() {
       )),
     [accountStatsMetric, accountStatsFilteredRows]
   );
-  const accountStatsRangeLabel = useMemo(() => buildUsageTrendRangeLabel(accountStatsRange), [accountStatsRange]);
+  const timeRangeLabel = useMemo(() => buildUsageTrendRangeLabel(timeRange), [timeRange]);
   const realtimeLogRows = useMemo(() => buildRealtimeLogRows(scopedRows), [scopedRows]);
 
   const accountQuotaTargetsByAccount = useMemo(
@@ -2533,7 +2612,7 @@ export function MonitoringCenterPage() {
   );
 
   const selectedFiltersCount =
-    [selectedAccount, selectedProvider, selectedModel, selectedApiKey, selectedStatus].filter(
+    [selectedProvider, selectedModel, selectedApiKey, selectedStatus].filter(
       (value) => value !== 'all'
     ).length + (deferredSearch.trim() ? 1 : 0);
 
@@ -2586,7 +2665,6 @@ export function MonitoringCenterPage() {
 
   const clearFilters = useCallback(() => {
     setSearchInput('');
-    setSelectedAccount('all');
     setSelectedProvider('all');
     setSelectedModel('all');
     setSelectedApiKey('all');
@@ -2678,10 +2756,6 @@ export function MonitoringCenterPage() {
       [accountId]: !previous[accountId],
     }));
   }, [expandedAccounts, loadAccountQuota]);
-
-  const handleAccountFilterChange = useCallback((value: string) => {
-    setSelectedAccount(value);
-  }, []);
 
   const handlePriceModelChange = useCallback(
     (value: string) => {
@@ -2792,9 +2866,12 @@ export function MonitoringCenterPage() {
       {!isUsageTrendHidden ? (
         <section className={styles.usageTrendSection}>
           <UsageTrendHeader
-            range={usageTrendRange}
+            range={timeRange}
             totalCalls={trendSummary.totalCalls}
-            onRangeChange={setUsageTrendRange}
+            apiKeyFilter={usageTrendApiKey}
+            apiKeyOptions={usageTrendApiKeyOptions}
+            onRangeChange={setTimeRange}
+            onApiKeyFilterChange={setUsageTrendApiKey}
             onHide={() => setIsUsageTrendHidden(true)}
             t={t}
           />
@@ -2853,9 +2930,9 @@ export function MonitoringCenterPage() {
             hasPrices={hasPrices}
             locale={i18n.language}
             t={t}
-            rangeLabel={accountStatsRangeLabel}
-            range={accountStatsRange}
-            onRangeChange={setAccountStatsRange}
+            rangeLabel={timeRangeLabel}
+            range={timeRange}
+            onRangeChange={setTimeRange}
             onHide={() => setIsAccountStatsHidden(true)}
             expandedAccounts={expandedAccounts}
             accountQuotaStates={accountQuotaStates}
@@ -2888,12 +2965,12 @@ export function MonitoringCenterPage() {
             </p>
           </div>
           <div className={styles.usageTrendActions}>
-            <div className={`${styles.rankingMetricSwitch} ${styles.usageTrendRangeControl}`}>
+            <div className={`${styles.rankingMetricSwitch} ${styles.timeRangeControl}`}>
               {TIME_RANGE_OPTIONS.map((option) => (
                 <button
                   key={option.value}
                   type="button"
-                  className={`${styles.rankingMetricButton} ${styles.usageTrendRangeButton} ${timeRange === option.value ? styles.rankingMetricButtonActive : ''}`}
+                  className={`${styles.rankingMetricButton} ${styles.timeRangeButton} ${timeRange === option.value ? styles.rankingMetricButtonActive : ''}`}
                   onClick={() => setTimeRange(option.value)}
                 >
                   {t(option.labelKey)}
@@ -2904,28 +2981,20 @@ export function MonitoringCenterPage() {
         </div>
 
         <Card className={styles.realtimePanel}>
-        <div className={styles.realtimeFilterToolbar}>
-          <div className={styles.realtimeSearchGroup}>
-            <Input
-              value={searchInput}
-              onChange={(event) => setSearchInput(event.target.value)}
-              placeholder={t('monitoring.search_placeholder')}
-              className={styles.toolbarHeaderSearchInput}
-              rightElement={<IconSearch size={16} />}
-              aria-label={t('monitoring.search_placeholder')}
-            />
-            <button type="button" className={styles.clearButton} onClick={clearFilters}>
-              <IconSlidersHorizontal size={16} />
-              <span>{t('monitoring.clear_filters')}</span>
-            </button>
-          </div>
-
         <div className={styles.filterGrid}>
+          <Input
+            value={searchInput}
+            onChange={(event) => setSearchInput(event.target.value)}
+            placeholder={t('monitoring.search_placeholder')}
+            className={styles.toolbarHeaderSearchInput}
+            rightElement={<IconSearch size={16} />}
+            aria-label={t('monitoring.search_placeholder')}
+          />
           <Select
-            value={selectedAccount}
-            options={accountOptions}
-            onChange={handleAccountFilterChange}
-            ariaLabel={t('monitoring.filter_account')}
+            value={selectedApiKey}
+            options={apiKeyOptions}
+            onChange={setSelectedApiKey}
+            ariaLabel="按 API 密钥筛选"
           />
           <Select
             value={selectedProvider}
@@ -2940,18 +3009,15 @@ export function MonitoringCenterPage() {
             ariaLabel={t('monitoring.filter_model')}
           />
           <Select
-            value={selectedApiKey}
-            options={apiKeyOptions}
-            onChange={setSelectedApiKey}
-            ariaLabel="按 API 密钥筛选"
-          />
-          <Select
             value={selectedStatus}
             options={statusOptions}
             onChange={(value) => setSelectedStatus(value as StatusFilter)}
             ariaLabel={t('monitoring.filter_status')}
           />
-        </div>
+          <button type="button" className={styles.clearButton} onClick={clearFilters}>
+            <IconSlidersHorizontal size={16} />
+            <span>{t('monitoring.clear_filters')}</span>
+          </button>
         </div>
 
         {combinedError ? <div className={styles.errorBox}>{combinedError}</div> : null}
@@ -2994,7 +3060,7 @@ export function MonitoringCenterPage() {
                     </div>
                   </td>
                   <td>
-                    <span className={styles.monoCell}>{row.apiKeyMasked}</span>
+                    <span className={styles.monoCell}>{row.clientApiKey.masked}</span>
                   </td>
                   <td>
                     <div className={styles.recentStatusCell}>
@@ -3003,8 +3069,8 @@ export function MonitoringCenterPage() {
                         variant="plain"
                         label={t('monitoring.recent_pattern_label', {
                           total: row.recentPattern.length,
-                          success: row.recentPattern.filter(Boolean).length,
-                          failure: row.recentPattern.filter((item) => !item).length,
+                          success: row.recentSuccessCount,
+                          failure: row.recentFailureCount,
                         })}
                       />
                     </div>

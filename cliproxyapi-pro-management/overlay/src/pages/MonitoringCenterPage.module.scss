@@ -462,27 +462,20 @@
 
 .filterGrid {
   display: grid;
-  grid-template-columns: minmax(220px, 1.2fr) repeat(4, minmax(128px, 1fr));
+  grid-template-columns: minmax(260px, 1.4fr) repeat(4, minmax(128px, 1fr)) auto;
   gap: 10px;
-  align-items: end;
-}
-
-.realtimeFilterToolbar {
-  display: grid;
-  gap: 10px;
-  margin-bottom: 14px;
-}
-
-.realtimeSearchGroup {
-  display: flex;
   align-items: center;
-  gap: 8px;
 }
 
-.realtimeSearchGroup :global(.form-group) {
-  flex: 1 1 auto;
+.filterGrid :global(.form-group) {
   min-width: 0;
   margin: 0;
+}
+
+.filterGrid .clearButton {
+  min-height: 40px;
+  padding: 0 12px;
+  white-space: nowrap;
 }
 
 .inlineMetrics,
@@ -842,6 +835,11 @@
   line-height: 1.5;
 }
 
+.usageTrendApiKeySelect {
+  width: 150px;
+  flex: 0 0 auto;
+}
+
 .trendHeaderStats {
   display: grid;
   grid-template-columns: repeat(3, minmax(64px, auto));
@@ -874,38 +872,44 @@
   line-height: 1.15;
 }
 
-.trendLegend {
-  display: inline-flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 8px 16px;
+.professionalChartShell {
+  display: grid;
+  grid-template-rows: auto minmax(250px, 260px) auto;
+  gap: 16px;
   min-width: 0;
+  min-height: 0;
+  align-content: start;
 }
 
-.trendLegend span {
+.trendChartLegend {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+  min-width: 0;
+  color: var(--monitor-ink);
+}
+
+.trendChartLegend span {
   display: inline-flex;
   align-items: center;
   gap: 7px;
-  color: var(--monitor-muted);
-  font-size: 12px;
-  font-weight: 700;
+  color: color-mix(in srgb, var(--monitor-ink) 64%, var(--monitor-muted));
+  font-size: 13px;
+  font-weight: 750;
+  letter-spacing: -0.01em;
+  line-height: 1;
   white-space: nowrap;
 }
 
-.trendLegend span::before {
+.trendChartLegend span::before {
   content: '';
-  width: 18px;
+  width: 22px;
   height: 3px;
   border-radius: 999px;
   background: var(--series-color);
-}
-
-.professionalChartShell {
-  display: grid;
-  grid-template-rows: auto minmax(0, 1fr) auto;
-  gap: 12px;
-  min-width: 0;
-  min-height: 0;
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--series-color) 12%, transparent);
 }
 
 .trendSummaryStrip {
@@ -917,20 +921,21 @@
 .trendSummaryItem {
   position: relative;
   display: grid;
-  gap: 5px;
+  gap: 6px;
   min-width: 0;
-  padding: 12px 12px 12px 14px;
+  padding: 12px 12px 12px 18px;
   overflow: hidden;
-  border-radius: 12px;
-  border: 1px solid color-mix(in srgb, var(--monitor-line) 74%, transparent);
-  background: color-mix(in srgb, var(--monitor-surface-muted) 54%, var(--monitor-surface));
+  border-radius: 14px;
+  border: 1px solid color-mix(in srgb, var(--monitor-line) 84%, transparent);
+  background: color-mix(in srgb, var(--monitor-surface) 96%, var(--monitor-bg));
+  box-shadow: 0 10px 24px -26px rgba(15, 23, 42, 0.58);
 }
 
 .trendSummaryItem::before {
   content: '';
   position: absolute;
-  inset: 12px auto 12px 0;
-  width: 3px;
+  inset: 10px auto 10px 0;
+  width: 4px;
   border-radius: 999px;
   background: var(--series-color);
 }
@@ -940,7 +945,7 @@
   overflow: hidden;
   color: var(--monitor-muted);
   font-size: 12px;
-  font-weight: 600;
+  font-weight: 800;
   line-height: 1.2;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -950,10 +955,10 @@
   min-width: 0;
   overflow: hidden;
   color: var(--monitor-ink);
-  font-size: 16px;
-  font-weight: 800;
-  letter-spacing: -0.02em;
-  line-height: 1.15;
+  font-size: 18px;
+  font-weight: 850;
+  letter-spacing: -0.03em;
+  line-height: 1.1;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -961,27 +966,50 @@
 .usageTrendSvg {
   display: block;
   width: 100%;
-  height: 100%;
+  height: 260px;
   min-height: 0;
   overflow: visible;
 }
 
 .chartGridLine {
-  stroke: color-mix(in srgb, var(--monitor-line) 78%, transparent);
-  stroke-dasharray: 4 8;
+  stroke: color-mix(in srgb, var(--monitor-line) 82%, transparent);
+  stroke-dasharray: 4 7;
   stroke-width: 1;
 }
 
+.chartAxisBase,
+.chartYAxisRequests,
+.chartYAxisCost,
+.chartYAxisTokens,
+.chartXAxisTick {
+  shape-rendering: crispEdges;
+}
+
 .chartAxisBase {
-  stroke: color-mix(in srgb, var(--monitor-line-strong) 58%, transparent);
+  stroke: color-mix(in srgb, var(--monitor-ink) 52%, transparent);
+  stroke-width: 1.1;
+}
+
+.chartYAxisRequests,
+.chartXAxisTick {
+  stroke: #2563eb;
+  stroke-width: 1.1;
+}
+
+.chartYAxisCost {
+  stroke: #047857;
+  stroke-width: 1.1;
+}
+
+.chartYAxisTokens {
+  stroke: #7c3aed;
   stroke-width: 1.1;
 }
 
 .chartAxisLabel,
 .chartXAxisLabel {
-  fill: var(--monitor-muted);
-  font-size: 12px;
-  font-weight: 600;
+  font-size: 13px;
+  font-weight: 650;
   dominant-baseline: middle;
 }
 
@@ -989,19 +1017,34 @@
   text-anchor: end;
 }
 
+.chartAxisLabelRequests {
+  fill: #2563eb;
+}
+
+.chartAxisLabelCost {
+  fill: #047857;
+  text-anchor: end;
+}
+
+.chartAxisLabelTokens {
+  fill: #7c3aed;
+  text-anchor: end;
+}
+
 .chartXAxisLabel {
+  fill: color-mix(in srgb, var(--monitor-ink) 66%, var(--monitor-muted));
   text-anchor: middle;
 }
 
 .trendAreaFill {
-  fill: url(#usageTrendFill);
+  opacity: 0.92;
 }
 
 .trendSeriesLine {
   fill: none;
   stroke-linecap: round;
   stroke-linejoin: round;
-  stroke-width: 2.4;
+  stroke-width: 2.8;
 }
 
 .trendSeriesDot {
@@ -2501,9 +2544,6 @@
 
 .summaryCard:hover {
   transform: translateY(-1px);
-}
-
-.summaryCard:hover {
   border-color: var(--monitor-line-strong);
   box-shadow: var(--shadow);
 }
@@ -3573,6 +3613,10 @@
     flex: 1 1 auto;
   }
 
+  .usageTrendApiKeySelect {
+    width: 150px;
+  }
+
   .usageTrendHideButton {
     flex: 0 0 auto;
   }
@@ -3651,8 +3695,29 @@
     padding: 0 12px;
   }
 
+  .usageTrendApiKeySelect,
   .usageTrendHideButton {
     width: 100%;
+  }
+
+  .usageTrendChartCard {
+    height: auto;
+    min-height: 520px;
+    padding: 16px;
+  }
+
+  .professionalChartShell {
+    grid-template-rows: auto minmax(230px, 240px) auto;
+    gap: 16px;
+    align-content: start;
+  }
+
+  .usageTrendSvg {
+    height: 240px;
+  }
+
+  .trendChartLegend {
+    justify-content: flex-start;
   }
 
   .accountOverviewCardGrid {
@@ -3669,7 +3734,10 @@
     flex-direction: column;
   }
 
-  .trendLegend,
+  .trendSummaryStrip {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .tokenDistributionLegend {
     justify-content: flex-start;
   }
@@ -3719,14 +3787,43 @@
     padding: 0 9px;
   }
 
-  .trendMetricStrip,
+  .trendSummaryStrip,
   .tokenTypeSummaryGrid {
     grid-template-columns: 1fr;
   }
 
   .usageTrendChartCard {
-    min-height: 320px;
-    padding: 16px;
+    min-height: 500px;
+    padding: 12px;
+  }
+
+  .professionalChartShell {
+    grid-template-rows: auto minmax(210px, 220px) auto;
+    gap: 16px;
+  }
+
+  .usageTrendSvg {
+    height: 220px;
+  }
+
+  .trendSummaryItem {
+    padding: 10px 10px 10px 16px;
+  }
+
+  .trendSummaryItem strong {
+    font-size: 17px;
+  }
+
+  .trendChartLegend {
+    gap: 8px 14px;
+  }
+
+  .trendChartLegend span {
+    font-size: 12px;
+  }
+
+  .trendChartLegend span::before {
+    width: 18px;
   }
 
   .modelStatsLayout {
