@@ -6,6 +6,35 @@ import type { AuthFileItem } from '@/types';
 import { GEMINI_CLI_IGNORED_MODEL_PREFIXES } from './constants';
 import { normalizeNumberValue } from './parsers';
 
+export type QuotaProviderType = 'antigravity' | 'claude' | 'codex' | 'gemini-cli' | 'kimi';
+
+type QuotaProviderMetadata = {
+  quotaMapName: 'antigravityQuota' | 'claudeQuota' | 'codexQuota' | 'geminiCliQuota' | 'kimiQuota';
+  setterName: 'setAntigravityQuota' | 'setClaudeQuota' | 'setCodexQuota' | 'setGeminiCliQuota' | 'setKimiQuota';
+};
+
+export const QUOTA_PROVIDER_METADATA: Record<QuotaProviderType, QuotaProviderMetadata> = {
+  antigravity: { quotaMapName: 'antigravityQuota', setterName: 'setAntigravityQuota' },
+  claude: { quotaMapName: 'claudeQuota', setterName: 'setClaudeQuota' },
+  codex: { quotaMapName: 'codexQuota', setterName: 'setCodexQuota' },
+  'gemini-cli': { quotaMapName: 'geminiCliQuota', setterName: 'setGeminiCliQuota' },
+  kimi: { quotaMapName: 'kimiQuota', setterName: 'setKimiQuota' },
+};
+
+export const QUOTA_PROVIDER_TYPES = Object.keys(QUOTA_PROVIDER_METADATA) as QuotaProviderType[];
+
+export function isQuotaProviderType(provider: string): provider is QuotaProviderType {
+  return provider in QUOTA_PROVIDER_METADATA;
+}
+
+export function getQuotaProviderMapName(provider: QuotaProviderType): QuotaProviderMetadata['quotaMapName'] {
+  return QUOTA_PROVIDER_METADATA[provider].quotaMapName;
+}
+
+export function getQuotaProviderSetterName(provider: QuotaProviderType): QuotaProviderMetadata['setterName'] {
+  return QUOTA_PROVIDER_METADATA[provider].setterName;
+}
+
 export function isRecordValue(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }

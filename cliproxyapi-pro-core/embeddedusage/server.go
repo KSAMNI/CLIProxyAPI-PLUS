@@ -15,10 +15,7 @@ import (
 
 const accountInspectionScheduleExportRecordType = "account_inspection_schedule"
 
-type usageStreamEvent struct {
-	LatestID          int64 `json:"latest_id"`
-	LatestTimestampMs int64 `json:"latest_timestamp_ms"`
-}
+type usageStreamEvent = internalusage.Payload
 
 type accountInspectionScheduleExportRecord struct {
 	RecordType string          `json:"record_type"`
@@ -137,12 +134,18 @@ func (s *Server) handleUsageStream(c *gin.Context) {
 		return
 	}
 
+	lastID := parseQueryInt64(c, "after_id", 0)
+	initialEvents, err := s.store.EventsAfter(c.Request.Context(), lastID, s.cfg.BatchSize)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
 	c.Header("Content-Type", "text/event-stream")
 	c.Header("Cache-Control", "no-cache")
 	c.Header("Connection", "keep-alive")
 	c.Header("X-Accel-Buffering", "no")
 
-	lastID := parseQueryInt64(c, "after_id", 0)
 	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()
 
@@ -158,18 +161,16 @@ func (s *Server) handleUsageStream(c *gin.Context) {
 		return true
 	}
 
-	latestID, latestTimestamp, err := s.store.LatestCursor(c.Request.Context())
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
-	}
-	if latestID > lastID {
-		lastID = latestID
-		if !writeEvent("usage", usageStreamEvent{LatestID: latestID, LatestTimestampMs: latestTimestamp}) {
+	if len(initialEvents) == 0 {
+		if !writeEvent("ready", internalusage.BuildPayload(nil)) {
 			return
 		}
-	} else if !writeEvent("ready", usageStreamEvent{LatestID: latestID, LatestTimestampMs: latestTimestamp}) {
-		return
+	} else {
+		payload := internalusage.BuildPayload(initialEvents)
+		lastID = payload.LatestID
+		if !writeEvent("usage", payload) {
+			return
+		}
 	}
 
 	for {
@@ -177,19 +178,20 @@ func (s *Server) handleUsageStream(c *gin.Context) {
 		case <-c.Request.Context().Done():
 			return
 		case <-ticker.C:
-			latestID, latestTimestamp, err := s.store.LatestCursor(c.Request.Context())
+			events, err := s.store.EventsAfter(c.Request.Context(), lastID, s.cfg.BatchSize)
 			if err != nil {
 				return
 			}
-			if latestID <= lastID {
+			if len(events) == 0 {
 				if _, err := fmt.Fprint(c.Writer, ": keepalive\n\n"); err != nil {
 					return
 				}
 				flusher.Flush()
 				continue
 			}
-			lastID = latestID
-			if !writeEvent("usage", usageStreamEvent{LatestID: latestID, LatestTimestampMs: latestTimestamp}) {
+			payload := internalusage.BuildPayload(events)
+			lastID = payload.LatestID
+			if !writeEvent("usage", payload) {
 				return
 			}
 		}

@@ -379,14 +379,14 @@ func (m *Manager) shouldRefreshForInspection(a *Auth, now time.Time) bool {
 	return true
 }
 
-func (m *Manager) markRefreshPendingForInspection(id string, now time.Time) bool {
+func (m *Manager) markRefreshPendingForInspection(id string, now time.Time, force bool) bool {
 	m.mu.Lock()
 	auth, ok := m.auths[id]
 	if !ok || auth == nil {
 		m.mu.Unlock()
 		return false
 	}
-	if !auth.NextRefreshAfter.IsZero() && now.Before(auth.NextRefreshAfter) {
+	if !force && !auth.NextRefreshAfter.IsZero() && now.Before(auth.NextRefreshAfter) {
 		m.mu.Unlock()
 		return false
 	}
@@ -399,6 +399,14 @@ func (m *Manager) markRefreshPendingForInspection(id string, now time.Time) bool
 }
 
 func (m *Manager) RefreshIfDueForInspection(ctx context.Context, id string) (*Auth, bool, error) {
+	return m.refreshForInspection(ctx, id, false)
+}
+
+func (m *Manager) ForceRefreshForInspection(ctx context.Context, id string) (*Auth, bool, error) {
+	return m.refreshForInspection(ctx, id, true)
+}
+
+func (m *Manager) refreshForInspection(ctx context.Context, id string, force bool) (*Auth, bool, error) {
 	if ctx == nil {
 		ctx = context.Background()
 	}
@@ -411,7 +419,7 @@ func (m *Manager) RefreshIfDueForInspection(ctx context.Context, id string) (*Au
 	}
 	current := auth.Clone()
 	accountType, _ := auth.AccountInfo()
-	if accountType == "api_key" || !m.shouldRefreshForInspection(auth, now) {
+	if accountType == "api_key" || (!force && !m.shouldRefreshForInspection(auth, now)) {
 		m.mu.RUnlock()
 		return current, false, nil
 	}
@@ -420,7 +428,7 @@ func (m *Manager) RefreshIfDueForInspection(ctx context.Context, id string) (*Au
 	if exec == nil {
 		return current, false, nil
 	}
-	if !m.markRefreshPendingForInspection(id, now) {
+	if !m.markRefreshPendingForInspection(id, now, force) {
 		m.mu.RLock()
 		defer m.mu.RUnlock()
 		if latest := m.auths[id]; latest != nil {

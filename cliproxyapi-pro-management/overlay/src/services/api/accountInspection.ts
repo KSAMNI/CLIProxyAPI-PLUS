@@ -47,10 +47,16 @@ export type AccountInspectionActionItem = Pick<
   action: AccountInspectionExecutionAction;
 };
 
-export type AccountInspectionActionsResponse = {
+export type AccountInspectionActionsResponse = AccountInspectionBackendResponse & {
   outcomes: AccountInspectionActionOutcome[];
   summary: { total: number; success: number; failed: number };
-  status: AccountInspectionBackendStatus;
+};
+
+export type AccountInspectionRefreshTokenItem = AccountInspectionInspectOneItem;
+
+export type AccountInspectionRefreshTokenResponse = AccountInspectionBackendResponse & {
+  result: AccountInspectionResultItem;
+  error?: string;
 };
 
 export type AccountInspectionScheduleResponse = AccountInspectionBackendResponse;
@@ -73,6 +79,8 @@ export const accountInspectionApi = {
   runNow: () => apiClient.post<AccountInspectionScheduleResponse>('/account-inspection/run', {}),
   inspectOne: (item: AccountInspectionInspectOneItem) =>
     apiClient.post<AccountInspectionScheduleResponse>('/account-inspection/inspect-one', { item }),
+  refreshToken: (item: AccountInspectionRefreshTokenItem) =>
+    apiClient.post<AccountInspectionRefreshTokenResponse>('/account-inspection/refresh-token', { item }),
   pause: () => apiClient.post<AccountInspectionScheduleResponse>('/account-inspection/pause', {}),
   resume: () => apiClient.post<AccountInspectionScheduleResponse>('/account-inspection/resume', {}),
   stop: () => apiClient.post<AccountInspectionScheduleResponse>('/account-inspection/stop', {}),

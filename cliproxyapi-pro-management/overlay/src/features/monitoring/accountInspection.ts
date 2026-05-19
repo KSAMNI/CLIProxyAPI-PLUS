@@ -55,6 +55,10 @@ export interface AccountInspectionResultItem extends AccountInspectionAccount {
   usedPercent: number | null;
   isQuota: boolean;
   error: string;
+  tokenRefreshTriggered?: boolean;
+  tokenRefreshStatus?: 'success' | 'failed' | '';
+  tokenRefreshError?: string;
+  nextRefreshAt?: number;
   executed?: boolean;
 }
 
@@ -499,6 +503,10 @@ export const accountInspectionBackendResultToItem = (
   usedPercent: item.usedPercent ?? null,
   isQuota: item.isQuota,
   error: item.executeError || item.error || '',
+  tokenRefreshTriggered: item.tokenRefreshTriggered ?? false,
+  tokenRefreshStatus: item.tokenRefreshStatus ?? '',
+  tokenRefreshError: item.tokenRefreshError ?? '',
+  nextRefreshAt: item.nextRefreshAt ?? 0,
   executed: item.executed,
 });
 

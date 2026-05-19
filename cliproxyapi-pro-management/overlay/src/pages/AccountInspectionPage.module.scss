@@ -324,7 +324,9 @@
 
 .cockpitSection,
 .workbenchSection,
-.operationSection {
+.operationSection,
+.resultsSection,
+.logsSection {
   display: grid;
   gap: 16px;
   min-width: 0;
@@ -362,6 +364,62 @@
   color: var(--inspect-muted);
   font-size: 13px;
   line-height: 1.6;
+}
+
+.resultFilterControl {
+  display: inline-flex;
+  flex: 0 0 auto;
+  max-width: 100%;
+  gap: 3px;
+  overflow-x: auto;
+  padding: 3px;
+  border: 1px solid color-mix(in srgb, var(--inspect-line) 80%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--inspect-surface-muted) 78%, var(--inspect-surface));
+  scrollbar-width: none;
+}
+
+.resultFilterControl::-webkit-scrollbar {
+  display: none;
+}
+
+.resultFilterButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 0 auto;
+  min-height: 28px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--inspect-muted);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition:
+    background-color 0.18s ease,
+    color 0.18s ease,
+    box-shadow 0.18s ease;
+}
+
+.resultFilterButton:hover {
+  color: var(--inspect-ink);
+}
+
+.resultFilterButtonActive {
+  background: var(--inspect-accent);
+  color: var(--primary-contrast, #fff);
+  box-shadow: 0 8px 18px -14px rgba(0, 0, 0, 0.45);
+}
+
+.logHeaderActions {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  min-width: 0;
 }
 
 .inspectionOperationGrid {
@@ -1972,69 +2030,6 @@
   line-height: 1.6;
 }
 
-.filterTabs,
-.logLevelTabs {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.filterTabs {
-  padding: 12px 14px;
-  border-radius: 10px;
-  border: 1px solid color-mix(in srgb, var(--inspect-line) 60%, transparent);
-  background: color-mix(in srgb, var(--inspect-surface-muted) 60%, transparent);
-}
-
-.filterTab,
-.logLevelTab {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  min-height: 34px;
-  padding: 0 12px;
-  border: 1px solid color-mix(in srgb, var(--inspect-line) 60%, transparent);
-  border-radius: 10px;
-  background: color-mix(in srgb, var(--inspect-surface-muted) 70%, transparent);
-  color: var(--inspect-muted);
-  font-size: 13px;
-  font-weight: 600;
-  line-height: 1.2;
-  cursor: pointer;
-  transition:
-    border-color 0.15s ease,
-    background-color 0.15s ease,
-    color 0.15s ease;
-}
-
-.filterTab strong {
-  display: inline-grid;
-  place-items: center;
-  min-width: 20px;
-  height: 20px;
-  padding: 0 6px;
-  border-radius: 6px;
-  background: color-mix(in srgb, var(--inspect-line) 24%, transparent);
-  color: var(--text-tertiary, var(--inspect-muted));
-  font-size: 11px;
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-  line-height: 1;
-}
-
-.filterTabActive,
-.logLevelTabActive {
-  border-color: color-mix(in srgb, var(--inspect-accent) 50%, var(--inspect-line));
-  background: color-mix(in srgb, var(--inspect-accent-soft) 22%, var(--inspect-surface-muted));
-  color: var(--inspect-ink);
-}
-
-.filterTabActive strong {
-  background: color-mix(in srgb, var(--inspect-accent) 22%, transparent);
-  color: var(--inspect-accent);
-}
-
 .healthBadge {
   display: inline-flex;
   align-items: center;
@@ -2074,58 +2069,51 @@
   max-height: min(620px, calc(100vh - 220px));
   overflow: auto;
   border: 1px solid var(--inspect-line);
-  border-radius: 8px;
+  border-radius: 12px;
+  background: var(--inspect-surface);
 }
 
 .table {
   width: 100%;
-  border-collapse: collapse;
-  min-width: 1060px;
+  border-collapse: separate;
+  border-spacing: 0;
   table-layout: fixed;
 }
 
 .accountColumn {
-  width: 20%;
-}
-
-.healthColumn {
-  width: 10%;
-}
-
-.stateColumn {
-  width: 8%;
-}
-
-.httpColumn {
-  width: 8%;
-}
-
-.usageColumn {
-  width: 9%;
-}
-
-.actionColumn {
-  width: 9%;
-}
-
-.reasonColumn {
   width: 25%;
 }
 
-.errorColumn {
-  width: 11%;
+.healthColumn {
+  width: 8%;
+}
+
+.enabledColumn {
+  width: 8%;
+}
+
+.quotaColumn {
+  width: 8%;
+}
+
+.tokenColumn {
+  width: 10%;
+}
+
+.verdictColumn {
+  width: 22%;
 }
 
 .operationColumn {
-  width: 12%;
+  width: 19%;
 }
 
 .table th,
 .table td {
-  padding: 10px 12px;
+  padding: 11px 12px;
   border-bottom: 1px solid var(--inspect-line);
   text-align: left;
-  vertical-align: top;
+  vertical-align: middle;
   font-size: 13px;
   line-height: 1.45;
 }
@@ -2133,11 +2121,12 @@
 .table th {
   position: sticky;
   top: 0;
-  z-index: 1;
+  z-index: 2;
   background: var(--inspect-surface-muted);
   color: var(--inspect-ink);
   font-size: 12px;
   font-weight: 700;
+  white-space: nowrap;
 }
 
 .table tbody tr:nth-child(2n) td {
@@ -2148,18 +2137,164 @@
   border-bottom: 0;
 }
 
+.table tbody tr:hover td {
+  background: color-mix(in srgb, var(--inspect-accent) 5%, var(--inspect-surface));
+}
+
 .primaryCell {
   display: grid;
   gap: 4px;
+  min-width: 0;
 }
 
 .primaryCell span {
-  font-weight: 600;
+  font-weight: 650;
+  line-height: 1.35;
   overflow-wrap: anywhere;
 }
 
 .primaryCell small {
+  font-size: 12px;
+  line-height: 1.35;
   overflow-wrap: anywhere;
+}
+
+.statusCell,
+.probeCell,
+.diagnosisCell,
+.quotaCell,
+.tokenRefreshCell,
+.verdictCell {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+
+.statusCell small,
+.probeCell small,
+.diagnosisCell small,
+.quotaCell small,
+.tokenRefreshCell small,
+.verdictCell small {
+  color: var(--inspect-muted);
+  font-size: 12px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.quotaCell span,
+.probeCell span {
+  color: var(--inspect-ink);
+  font-weight: 650;
+}
+
+.quotaCell small,
+.probeCell span {
+  font-variant-numeric: tabular-nums;
+}
+
+.verdictCell strong {
+  color: var(--inspect-ink);
+  font-size: 13px;
+  font-weight: 650;
+  line-height: 1.4;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.verdictCell span {
+  color: var(--inspect-muted);
+  font-size: 12px;
+  line-height: 1.35;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.statePill {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  min-height: 24px;
+  padding: 0 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 650;
+  white-space: nowrap;
+}
+
+.statePillGood {
+  background: color-mix(in srgb, var(--inspect-green) 12%, var(--inspect-surface));
+  color: var(--inspect-green);
+}
+
+.statePillMuted {
+  background: var(--inspect-surface-muted);
+  color: var(--inspect-muted);
+}
+
+.statePillWarn {
+  background: color-mix(in srgb, var(--inspect-amber) 12%, var(--inspect-surface));
+  color: var(--inspect-amber);
+}
+
+.statePillBad {
+  background: color-mix(in srgb, var(--inspect-red) 12%, var(--inspect-surface));
+  color: var(--inspect-red);
+}
+
+.diagnosisCell span {
+  overflow-wrap: anywhere;
+}
+
+.compactCell,
+.numericCell {
+  color: var(--inspect-ink);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.numericCell {
+  text-align: right;
+}
+
+.reasonCell,
+.errorCell {
+  max-width: 0;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.errorCell {
+  font-size: 12px;
+}
+
+.operationCell {
+  vertical-align: middle;
+}
+
+.operationCell .operationActions {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 4px;
+}
+
+.operationCell .operationActions :global(.btn) {
+  flex: 0 0 auto;
+  width: auto;
+  min-width: 34px;
+  min-height: 26px;
+  padding: 0 5px;
+  border-radius: 7px;
+  font-size: 12px;
+  line-height: 1.2;
+}
+
+.operationCell .operationActions :global(.btn + .btn) {
+  margin-left: 0;
 }
 
 .monoCell {
@@ -2169,47 +2304,17 @@
 
 .operationActions {
   display: flex;
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
   align-items: center;
+  justify-content: flex-start;
   gap: 6px;
-  white-space: nowrap;
 }
 
 .operationActions :global(.btn) {
   flex: 0 0 auto;
-  padding: 6px 10px;
-}
-
-.actionBadge {
-  display: inline-flex;
-  align-items: center;
-  min-height: 24px;
-  padding: 0 8px;
-  border-radius: 999px;
-  border: 1px solid transparent;
-  font-size: 12px;
-  font-weight: 600;
-}
-
-
-.actionKeep {
-  background: var(--inspect-surface-muted);
-  color: var(--inspect-muted);
-}
-
-.actionDelete {
-  background: color-mix(in srgb, var(--inspect-red) 12%, var(--inspect-surface));
-  color: var(--inspect-red);
-}
-
-.actionDisable {
-  background: color-mix(in srgb, var(--inspect-amber) 12%, var(--inspect-surface));
-  color: var(--inspect-amber);
-}
-
-.actionEnable {
-  background: color-mix(in srgb, var(--inspect-green) 12%, var(--inspect-surface));
-  color: var(--inspect-green);
+  min-height: 30px;
+  padding: 0 9px;
+  border-radius: 8px;
 }
 
 .resultCards {
@@ -2285,12 +2390,103 @@
 
 .confirmationBody {
   display: grid;
-  gap: 14px;
+  gap: 12px;
 }
 
 .confirmationBody p {
   margin: 0;
+  color: var(--inspect-muted);
+  font-size: 13px;
   line-height: 1.6;
+}
+
+.confirmationLead {
+  display: grid;
+  gap: 6px;
+  padding: 14px;
+  border: 1px solid color-mix(in srgb, var(--inspect-accent) 18%, var(--inspect-line));
+  border-radius: 12px;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--inspect-accent) 7%, var(--inspect-surface)), var(--inspect-surface));
+}
+
+.confirmationLead strong {
+  color: var(--inspect-ink);
+  font-size: 14px;
+  font-weight: 750;
+  line-height: 1.35;
+}
+
+.confirmationLead span {
+  color: var(--inspect-muted);
+  font-size: 13px;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+
+.confirmationLeadDanger {
+  border-color: color-mix(in srgb, var(--inspect-red) 28%, var(--inspect-line));
+  background: linear-gradient(180deg, color-mix(in srgb, var(--inspect-red) 8%, var(--inspect-surface)), var(--inspect-surface));
+}
+
+.confirmationAccountCard {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  padding: 12px 14px;
+  border: 1px solid var(--inspect-line);
+  border-radius: 12px;
+  background: var(--inspect-surface-muted);
+}
+
+.confirmationAccountCard div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.confirmationAccountCard span {
+  color: var(--inspect-ink);
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.confirmationAccountCard small {
+  color: var(--inspect-muted);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.confirmationAccountCard strong {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--inspect-accent) 10%, var(--inspect-surface));
+  color: var(--inspect-accent);
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.confirmationNotice {
+  padding: 10px 12px;
+  border: 1px solid color-mix(in srgb, var(--inspect-amber) 24%, var(--inspect-line));
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--inspect-amber) 9%, var(--inspect-surface));
+  color: var(--inspect-amber);
+  font-size: 12px;
+  font-weight: 650;
+  line-height: 1.5;
+}
+
+.confirmationNoticeDanger {
+  border-color: color-mix(in srgb, var(--inspect-red) 28%, var(--inspect-line));
+  background: color-mix(in srgb, var(--inspect-red) 9%, var(--inspect-surface));
+  color: var(--inspect-red);
 }
 
 .confirmationStats {
@@ -2336,8 +2532,22 @@
   line-height: 1.5;
 }
 
+.confirmationCompactRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.confirmationCompactRow small {
+  color: var(--inspect-muted);
+}
+
 .confirmationPreviewRow span,
-.confirmationPreviewRow em {
+.confirmationPreviewRow em,
+.confirmationCompactRow span {
   overflow-wrap: anywhere;
 }
 
@@ -2437,7 +2647,8 @@
 
   .heroActions,
   .panelActions,
-  .resultsHeaderActions {
+  .resultsHeaderActions,
+  .logHeaderActions {
     justify-content: flex-start;
   }
 

@@ -16,10 +16,6 @@ import {
   type UsageDetailWithEndpoint,
 } from '@/utils/usage';
 
-const isRecord = isRecordValue;
-const readString = readStringValue;
-const parseBoolean = readBooleanValue;
-
 const padNumber = (value: number) => String(value).padStart(2, '0');
 
 export const buildLocalDayKey = (timestampMs: number) => {
@@ -90,13 +86,13 @@ const maskClientApiKey = (value: string) => {
 
 const extractArrayPayload = (payload: unknown, key: string): unknown[] => {
   if (Array.isArray(payload)) return payload;
-  if (!isRecord(payload)) return [];
+  if (!isRecordValue(payload)) return [];
   const candidate = payload[key] ?? payload.items ?? payload.data ?? payload;
   return Array.isArray(candidate) ? candidate : [];
 };
 
 const extractHost = (baseUrl: string) => {
-  const trimmed = readString(baseUrl);
+  const trimmed = readStringValue(baseUrl);
   if (!trimmed) return '-';
 
   try {
@@ -456,10 +452,10 @@ type MonitoringMetaPayload = {
 };
 
 const normalizeOpenAIChannel = (value: unknown, index: number): MonitoringChannelMeta | null => {
-  if (!isRecord(value)) return null;
+  if (!isRecordValue(value)) return null;
 
-  const name = readString(value.name || value.id) || `openai-${index + 1}`;
-  const baseUrl = readString(value['base-url'] ?? value.baseUrl);
+  const name = readStringValue(value.name || value.id) || `openai-${index + 1}`;
+  const baseUrl = readStringValue(value['base-url'] ?? value.baseUrl);
   if (!baseUrl) return null;
 
   const authIndices = new Set<string>();
@@ -472,7 +468,7 @@ const normalizeOpenAIChannel = (value: unknown, index: number): MonitoringChanne
 
   const apiKeyEntries = Array.isArray(value['api-key-entries']) ? value['api-key-entries'] : [];
   apiKeyEntries.forEach((entry) => {
-    if (!isRecord(entry)) return;
+    if (!isRecordValue(entry)) return;
     const authIndex = normalizeAuthIndex(
       entry['auth-index'] ?? entry.authIndex ?? entry['auth_index']
     );
@@ -484,9 +480,9 @@ const normalizeOpenAIChannel = (value: unknown, index: number): MonitoringChanne
   const modelNames = Array.isArray(value.models)
     ? value.models
         .map((item) => {
-          if (typeof item === 'string') return readString(item);
-          if (!isRecord(item)) return '';
-          return readString(item.name ?? item.alias ?? item.id ?? item.model);
+          if (typeof item === 'string') return readStringValue(item);
+          if (!isRecordValue(item)) return '';
+          return readStringValue(item.name ?? item.alias ?? item.id ?? item.model);
         })
         .filter(Boolean)
     : [];
@@ -496,22 +492,22 @@ const normalizeOpenAIChannel = (value: unknown, index: number): MonitoringChanne
     name,
     baseUrl,
     host: extractHost(baseUrl),
-    disabled: parseBoolean(value.disabled),
+    disabled: readBooleanValue(value.disabled),
     authIndices: Array.from(authIndices),
     modelNames: Array.from(new Set(modelNames)),
   };
 };
 
 const readAuthTimestamp = (entry: AuthFileItem) =>
-  readString(entry['updated_at'] ?? entry.updatedAt ?? entry['modtime'] ?? entry.modified);
+  readStringValue(entry['updated_at'] ?? entry.updatedAt ?? entry['modtime'] ?? entry.modified);
 
 const readNestedString = (value: unknown, path: string[]) => {
   let current = value;
   for (const key of path) {
-    if (!isRecord(current)) return '';
+    if (!isRecordValue(current)) return '';
     current = current[key];
   }
-  return readString(current);
+  return readStringValue(current);
 };
 
 const looksLikeAuthFileName = (value: string) => /_oauth_creds\.json$/i.test(value) || /\.json$/i.test(value);
@@ -519,12 +515,12 @@ const looksLikeAuthFileName = (value: string) => /_oauth_creds\.json$/i.test(val
 const normalizeProviderLabel = (value: string) => value.trim().toLowerCase().replace(/[_\s]+/g, '-');
 
 const resolveAuthDisplayName = (entry: AuthFileItem, authIndex: string) => {
-  const provider = readString(entry.provider) || readString(entry.type);
+  const provider = readStringValue(entry.provider) || readStringValue(entry.type);
   const providerLabel = normalizeProviderLabel(provider);
-  const label = readString(entry.label);
-  const name = readString(entry.name);
-  const email = readString(entry.email) || readNestedString(entry, ['id_token', 'email']);
-  const account = readString(entry.account) || readNestedString(entry, ['id_token', 'account']);
+  const label = readStringValue(entry.label);
+  const name = readStringValue(entry.name);
+  const email = readStringValue(entry.email) || readNestedString(entry, ['id_token', 'email']);
+  const account = readStringValue(entry.account) || readNestedString(entry, ['id_token', 'account']);
   const username = readNestedString(entry, ['id_token', 'preferred_username']);
   const subject = readNestedString(entry, ['id_token', 'sub']);
   const fallback = [email, account, username, label, name, subject, authIndex].find((value) => {
@@ -542,23 +538,23 @@ const normalizeAuthMeta = (entry: AuthFileItem): MonitoringAuthMeta | null => {
 
   const label = resolveAuthDisplayName(entry, authIndex);
 
-  const planType = readString(
-    isRecord(entry.id_token) ? entry.id_token.plan_type : entry['plan_type']
+  const planType = readStringValue(
+    isRecordValue(entry.id_token) ? entry.id_token.plan_type : entry['plan_type']
   );
 
-  const provider = readString(entry.provider) || readString(entry.type) || '-';
-  const email = readString(entry.email) || readNestedString(entry, ['id_token', 'email']);
-  const name = readString(entry.name);
+  const provider = readStringValue(entry.provider) || readStringValue(entry.type) || '-';
+  const email = readStringValue(entry.email) || readNestedString(entry, ['id_token', 'email']);
+  const name = readStringValue(entry.name);
 
   return {
     authIndex,
     label,
     account: email || name || '-',
     provider,
-    status: readString(entry.status) || 'unknown',
-    disabled: parseBoolean(entry.disabled),
-    unavailable: parseBoolean(entry.unavailable),
-    runtimeOnly: parseBoolean(entry.runtime_only ?? entry.runtimeOnly),
+    status: readStringValue(entry.status) || 'unknown',
+    disabled: readBooleanValue(entry.disabled),
+    unavailable: readBooleanValue(entry.unavailable),
+    runtimeOnly: readBooleanValue(entry.runtime_only ?? entry.runtimeOnly),
     planType: planType || '-',
     updatedAt: readAuthTimestamp(entry),
   };
@@ -1419,9 +1415,9 @@ const buildEventRows = (
       const accountMasked = maskEmailLike(account);
       const channelMeta = channelByAuthIndex.get(authIndex);
       const channelLabel = channelMeta?.name || authMeta?.provider || sourceMeta.type || '-';
-      const endpoint = readString(detail.__endpoint) || '-';
-      const endpointMethod = readString(detail.__endpointMethod) || '-';
-      const endpointPath = readString(detail.__endpointPath) || endpoint;
+      const endpoint = readStringValue(detail.__endpoint) || '-';
+      const endpointMethod = readStringValue(detail.__endpointMethod) || '-';
+      const endpointPath = readStringValue(detail.__endpointPath) || endpoint;
       const inputTokens = Math.max(Number(detail.tokens?.input_tokens) || 0, 0);
       const outputTokens = Math.max(Number(detail.tokens?.output_tokens) || 0, 0);
       const reasoningTokens = Math.max(Number(detail.tokens?.reasoning_tokens) || 0, 0);
@@ -1431,7 +1427,7 @@ const buildEventRows = (
       );
       const totalTokens = Math.max(Number(detail.tokens?.total_tokens) || 0, extractTotalTokens(detail));
       const totalCost = calculateCost(detail, modelPrices);
-      const apiKeyHash = readString(detail.api_key_hash) || '-';
+      const apiKeyHash = readStringValue(detail.api_key_hash) || '-';
       const configuredApiKey = apiKeyHash === '-' ? null : configuredApiKeys.byHash.get(apiKeyHash);
       const singleConfiguredApiKey = configuredApiKeys.keys.length === 1 ? configuredApiKeys.keys[0] : null;
       const clientApiKey = configuredApiKey || (apiKeyHash === '-' ? singleConfiguredApiKey : null);
@@ -1453,7 +1449,7 @@ const buildEventRows = (
         timestampMs,
         dayKey,
         hourLabel,
-        model: readString(detail.__modelName) || '-',
+        model: readStringValue(detail.__modelName) || '-',
         endpoint,
         endpointMethod,
         endpointPath,
@@ -1605,7 +1601,7 @@ export function useMonitoringData({
       if (!authIndex) return;
       map.set(authIndex, {
         name: resolveAuthDisplayName(entry, authIndex),
-        type: readString(entry.provider) || readString(entry.type),
+        type: readStringValue(entry.provider) || readStringValue(entry.type),
       });
     });
     return map;

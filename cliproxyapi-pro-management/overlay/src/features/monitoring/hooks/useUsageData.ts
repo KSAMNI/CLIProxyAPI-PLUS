@@ -130,6 +130,14 @@ export function useUsageData(): UseUsageDataReturn {
     }
   }, []);
 
+  const applyUsagePayload = useCallback((payload: UsagePayload | null) => {
+    const nextLatestId = toNumber(payload?.latest_id);
+    if (nextLatestId <= latestIdRef.current) return;
+    latestIdRef.current = nextLatestId;
+    setUsage((current) => mergeUsagePayload(current, payload));
+    setLastRefreshedAt(new Date());
+  }, []);
+
   const loadUsageIncremental = useCallback(async () => {
     if (incrementalLoadingRef.current) {
       incrementalPendingRef.current = true;
@@ -148,12 +156,7 @@ export function useUsageData(): UseUsageDataReturn {
 
         try {
           const payload = await apiClient.get<UsagePayload>(`/usage/events?after_id=${afterId}&limit=5000`);
-          const nextLatestId = toNumber(payload?.latest_id);
-          if (nextLatestId > latestIdRef.current) {
-            latestIdRef.current = nextLatestId;
-            setUsage((current) => mergeUsagePayload(current, payload ?? null));
-            setLastRefreshedAt(new Date());
-          }
+          applyUsagePayload(payload ?? null);
         } catch {
           await loadUsage();
         }
@@ -161,7 +164,7 @@ export function useUsageData(): UseUsageDataReturn {
     } finally {
       incrementalLoadingRef.current = false;
     }
-  }, [loadUsage]);
+  }, [applyUsagePayload, loadUsage]);
 
   useEffect(() => {
     let cancelled = false;
@@ -196,10 +199,13 @@ export function useUsageData(): UseUsageDataReturn {
     if (connectionStatus !== 'connected' || !apiBase || !managementKey) return;
 
     const controller = new AbortController();
-    const decoder = new TextDecoder();
-    let buffer = '';
+    let reconnectDelay = 1000;
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
 
     const connect = async () => {
+      const decoder = new TextDecoder();
+      let buffer = '';
+
       try {
         const url = buildUsageStreamUrl(apiBase, latestIdRef.current);
         if (!url) return;
@@ -207,8 +213,11 @@ export function useUsageData(): UseUsageDataReturn {
           headers: { Authorization: `Bearer ${managementKey}` },
           signal: controller.signal,
         });
-        if (!response.ok || !response.body) return;
+        if (!response.ok || !response.body) {
+          throw new Error(`Usage stream failed: ${response.status}`);
+        }
 
+        reconnectDelay = 1000;
         const reader = response.body.getReader();
         while (!controller.signal.aborted) {
           const { value, done } = await reader.read();
@@ -219,7 +228,11 @@ export function useUsageData(): UseUsageDataReturn {
           parts.forEach((part) => {
             const message = readSseMessage(part);
             if (message?.event !== 'usage') return;
-            void loadUsageIncremental();
+            try {
+              applyUsagePayload(JSON.parse(message.data) as UsagePayload);
+            } catch {
+              void loadUsageIncremental();
+            }
           });
         }
       } catch (err) {
@@ -227,11 +240,22 @@ export function useUsageData(): UseUsageDataReturn {
           console.warn('Usage SSE stream disconnected:', err);
         }
       }
+
+      if (!controller.signal.aborted) {
+        timeoutId = setTimeout(() => {
+          void loadUsageIncremental();
+          void connect();
+        }, reconnectDelay);
+        reconnectDelay = Math.min(reconnectDelay * 2, 30000);
+      }
     };
 
     void connect();
-    return () => controller.abort();
-  }, [apiBase, connectionStatus, loadUsageIncremental, managementKey]);
+    return () => {
+      controller.abort();
+      if (timeoutId) clearTimeout(timeoutId);
+    };
+  }, [apiBase, applyUsagePayload, connectionStatus, loadUsageIncremental, managementKey]);
 
   const setModelPrices = useCallback((prices: Record<string, ModelPrice>) => {
     setModelPricesState(prices);

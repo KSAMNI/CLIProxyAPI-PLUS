@@ -31,7 +31,6 @@ import {
 } from '@/features/monitoring/hooks/useMonitoringData';
 import { useUsageData } from '@/features/monitoring/hooks/useUsageData';
 import { useHeaderRefresh } from '@/hooks/useHeaderRefresh';
-import { useInterval } from '@/hooks/useInterval';
 import { apiClient } from '@/services/api/client';
 import { useAuthStore, useConfigStore, useNotificationStore, useQuotaStore } from '@/stores';
 import type { AuthFileItem } from '@/types';
@@ -2352,10 +2351,6 @@ export function MonitoringCenterPage() {
     await Promise.all([refreshUsage(), refreshMeta(false)]);
   }, [refreshUsage, refreshMeta]);
 
-  const refreshUsageOnly = useCallback(async () => {
-    await refreshUsage();
-  }, [refreshUsage]);
-
   const handleExportUsage = useCallback(async () => {
     if (connectionStatus !== 'connected') {
       showNotification(t('notification.connection_required'), 'warning');
@@ -2425,12 +2420,6 @@ export function MonitoringCenterPage() {
   );
 
   useHeaderRefresh(refreshAll);
-  useInterval(
-    () => {
-      void refreshUsageOnly().catch(() => {});
-    },
-    connectionStatus === 'connected' ? 5000 : null
-  );
 
   const overallLoading = usageLoading || monitoringLoading;
   const combinedError = [usageError, monitoringError].filter(Boolean).join('；');
@@ -2599,10 +2588,7 @@ export function MonitoringCenterPage() {
     () => getRankingMetricTotalFromRows(trendStatsRows, apiKeyRankingMetric),
     [apiKeyRankingMetric, trendStatsRows]
   );
-  const accountStatsFilteredRows = useMemo(
-    () => filterRowsByRange(topStatsRows, timeRange),
-    [topStatsRows, timeRange]
-  );
+  const accountStatsFilteredRows = trendStatsRows;
   const accountStatsRows = useMemo(
     () => [...buildAccountRows(accountStatsFilteredRows, 'account', { includeRows: true })]
       .sort((left, right) => (

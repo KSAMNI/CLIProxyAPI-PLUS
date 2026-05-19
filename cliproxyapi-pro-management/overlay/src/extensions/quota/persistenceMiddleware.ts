@@ -4,9 +4,14 @@
  */
 
 import { useQuotaStore } from '@/stores';
+import {
+  getQuotaProviderMapName,
+  getQuotaProviderSetterName,
+  isQuotaProviderType,
+  QUOTA_PROVIDER_TYPES,
+  type QuotaProviderType,
+} from '@/utils/quota';
 import { sqliteQuotaCache, type QuotaCacheEntry } from './sqliteQuotaCache';
-
-type QuotaProviderType = 'antigravity' | 'claude' | 'codex' | 'gemini-cli' | 'kimi';
 
 interface QuotaStatusState {
   status: 'idle' | 'loading' | 'success' | 'error';
@@ -78,16 +83,8 @@ class QuotaPersistenceMiddleware {
   private checkCompatibility(): boolean {
     const state = useQuotaStore.getState();
     const requiredFields = [
-      'antigravityQuota',
-      'claudeQuota',
-      'codexQuota',
-      'geminiCliQuota',
-      'kimiQuota',
-      'setAntigravityQuota',
-      'setClaudeQuota',
-      'setCodexQuota',
-      'setGeminiCliQuota',
-      'setKimiQuota',
+      ...QUOTA_PROVIDER_TYPES.map(getQuotaProviderMapName),
+      ...QUOTA_PROVIDER_TYPES.map(getQuotaProviderSetterName),
       'clearQuotaCache',
     ];
 
@@ -205,7 +202,7 @@ class QuotaPersistenceMiddleware {
 
       const entriesByProvider = new Map<QuotaProviderType, QuotaCacheEntry[]>();
       cachedEntries.forEach((entry) => {
-        if (!this.isQuotaProvider(entry.provider)) return;
+        if (!isQuotaProviderType(entry.provider)) return;
         latestCachedAt = Math.max(latestCachedAt, entry.cachedAt ?? 0);
         const provider = entry.provider;
         const entries = entriesByProvider.get(provider) ?? [];
@@ -231,7 +228,7 @@ class QuotaPersistenceMiddleware {
     const cached = new Map(cachedEntries.map((entry) => [entry.fileName, entry]));
     if (cached.size === 0) return;
 
-    const setterName = this.getSetterName(provider) as 'setAntigravityQuota' | 'setClaudeQuota' | 'setCodexQuota' | 'setGeminiCliQuota' | 'setKimiQuota';
+    const setterName = getQuotaProviderSetterName(provider);
     const storeState = useQuotaStore.getState();
     const setter = storeState[setterName];
 
@@ -259,40 +256,8 @@ class QuotaPersistenceMiddleware {
     state: any,
     provider: QuotaProviderType
   ): Record<string, QuotaStatusState> | null {
-    const mapName = this.getQuotaMapName(provider);
+    const mapName = getQuotaProviderMapName(provider);
     return state[mapName] || null;
-  }
-
-  private isQuotaProvider(provider: string): provider is QuotaProviderType {
-    return ['antigravity', 'claude', 'codex', 'gemini-cli', 'kimi'].includes(provider);
-  }
-
-  /**
-   * Get quota map name by provider
-   */
-  private getQuotaMapName(provider: QuotaProviderType): string {
-    const mapping: Record<QuotaProviderType, string> = {
-      'antigravity': 'antigravityQuota',
-      'claude': 'claudeQuota',
-      'codex': 'codexQuota',
-      'gemini-cli': 'geminiCliQuota',
-      'kimi': 'kimiQuota',
-    };
-    return mapping[provider];
-  }
-
-  /**
-   * Get setter name by provider
-   */
-  private getSetterName(provider: QuotaProviderType): string {
-    const mapping: Record<QuotaProviderType, string> = {
-      'antigravity': 'setAntigravityQuota',
-      'claude': 'setClaudeQuota',
-      'codex': 'setCodexQuota',
-      'gemini-cli': 'setGeminiCliQuota',
-      'kimi': 'setKimiQuota',
-    };
-    return mapping[provider];
   }
 
   /**

@@ -88,22 +88,26 @@ type accountInspectionLogEntry struct {
 }
 
 type accountInspectionResult struct {
-	Key          string                  `json:"key"`
-	Provider     string                  `json:"provider"`
-	FileName     string                  `json:"fileName"`
-	DisplayName  string                  `json:"displayName"`
-	Email        string                  `json:"email"`
-	Name         string                  `json:"name"`
-	AuthIndex    string                  `json:"authIndex"`
-	Disabled     bool                    `json:"disabled"`
-	Action       accountInspectionAction `json:"action"`
-	ActionReason string                  `json:"actionReason"`
-	StatusCode   *int                    `json:"statusCode"`
-	UsedPercent  *float64                `json:"usedPercent"`
-	IsQuota      bool                    `json:"isQuota"`
-	Error        string                  `json:"error"`
-	Executed     bool                    `json:"executed"`
-	ExecuteError string                  `json:"executeError"`
+	Key                   string                  `json:"key"`
+	Provider              string                  `json:"provider"`
+	FileName              string                  `json:"fileName"`
+	DisplayName           string                  `json:"displayName"`
+	Email                 string                  `json:"email"`
+	Name                  string                  `json:"name"`
+	AuthIndex             string                  `json:"authIndex"`
+	Disabled              bool                    `json:"disabled"`
+	Action                accountInspectionAction `json:"action"`
+	ActionReason          string                  `json:"actionReason"`
+	StatusCode            *int                    `json:"statusCode"`
+	UsedPercent           *float64                `json:"usedPercent"`
+	IsQuota               bool                    `json:"isQuota"`
+	Error                 string                  `json:"error"`
+	TokenRefreshTriggered bool                    `json:"tokenRefreshTriggered"`
+	TokenRefreshStatus    string                  `json:"tokenRefreshStatus"`
+	TokenRefreshError     string                  `json:"tokenRefreshError"`
+	NextRefreshAt         int64                   `json:"nextRefreshAt"`
+	Executed              bool                    `json:"executed"`
+	ExecuteError          string                  `json:"executeError"`
 }
 
 type accountInspectionSummary struct {
@@ -232,6 +236,10 @@ type accountInspectionActionRequest struct {
 }
 
 type accountInspectionOneRequest struct {
+	Item accountInspectionActionItem `json:"item"`
+}
+
+type accountInspectionRefreshTokenRequest struct {
 	Item accountInspectionActionItem `json:"item"`
 }
 
@@ -413,34 +421,28 @@ func (s *accountInspectionScheduler) snapshot() gin.H {
 	}
 }
 
-func (s *accountInspectionScheduler) statusSnapshotLocked() accountInspectionStatus {
+func (s *accountInspectionScheduler) streamStatusLocked(includeDetails bool) accountInspectionStatus {
 	status := s.status
-	status.Logs = append([]accountInspectionLogEntry(nil), s.status.Logs...)
-	status.Results = append([]accountInspectionResult(nil), s.status.Results...)
-	return status
-}
-
-func (s *accountInspectionScheduler) statusEventLocked() accountInspectionStatus {
-	status := s.status
-	status.Logs = nil
-	status.Results = nil
+	if includeDetails {
+		status.Logs = append([]accountInspectionLogEntry(nil), s.status.Logs...)
+		status.Results = append([]accountInspectionResult(nil), s.status.Results...)
+	} else {
+		status.Logs = nil
+		status.Results = nil
+	}
 	return status
 }
 
 func (s *accountInspectionScheduler) snapshotStreamMessageLocked() accountInspectionLogStreamMessage {
-	return accountInspectionLogStreamMessage{Type: accountInspectionStreamSnapshot, Schedule: s.schedule, Status: s.statusSnapshotLocked()}
+	return accountInspectionLogStreamMessage{Type: accountInspectionStreamSnapshot, Schedule: s.schedule, Status: s.streamStatusLocked(true)}
 }
 
 func (s *accountInspectionScheduler) statusStreamMessageLocked(snapshot bool) accountInspectionLogStreamMessage {
-	status := s.statusEventLocked()
-	if snapshot {
-		status = s.statusSnapshotLocked()
-	}
-	return accountInspectionLogStreamMessage{Type: accountInspectionStreamStatus, Schedule: s.schedule, Status: status}
+	return accountInspectionLogStreamMessage{Type: accountInspectionStreamStatus, Schedule: s.schedule, Status: s.streamStatusLocked(snapshot)}
 }
 
 func (s *accountInspectionScheduler) logStreamMessageLocked(entry accountInspectionLogEntry) accountInspectionLogStreamMessage {
-	return accountInspectionLogStreamMessage{Type: accountInspectionStreamLog, Schedule: s.schedule, Status: s.statusEventLocked(), Log: &entry}
+	return accountInspectionLogStreamMessage{Type: accountInspectionStreamLog, Schedule: s.schedule, Status: s.streamStatusLocked(false), Log: &entry}
 }
 
 type accountInspectionBroadcast struct {
@@ -722,6 +724,90 @@ func (s *accountInspectionScheduler) inspectOne(item accountInspectionActionItem
 	return nil
 }
 
+func (s *accountInspectionScheduler) refreshTokenNow(ctx context.Context, item accountInspectionActionItem) (accountInspectionResult, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if s == nil || s.h == nil || s.h.authManager == nil {
+		return accountInspectionResult{}, fmt.Errorf("core auth manager unavailable")
+	}
+	auths, err := s.auths()
+	if err != nil {
+		return accountInspectionResult{}, err
+	}
+	for _, auth := range auths {
+		account := accountFromAuth(auth)
+		if item.Key != "" && account.Key != item.Key {
+			continue
+		}
+		if item.Key == "" && (account.FileName != item.FileName || account.AuthIndex != item.AuthIndex) {
+			continue
+		}
+		result := account.baseResult()
+		result.TokenRefreshTriggered = true
+		if account.Auth == nil || account.Auth.ID == "" {
+			result.TokenRefreshStatus = "failed"
+			result.TokenRefreshError = "missing auth id"
+			result.Error = result.TokenRefreshError
+			result.ActionReason = "刷新令牌失败，保留账号"
+			return result, errors.New(result.TokenRefreshError)
+		}
+		s.appendLog("info", fmt.Sprintf("主动刷新令牌 %s", account.identity()))
+		updated, refreshed, refreshErr := s.h.authManager.ForceRefreshForInspection(ctx, account.Auth.ID)
+		if updated != nil {
+			account = accountFromAuth(updated)
+			result = account.baseResult()
+		}
+		result.TokenRefreshTriggered = true
+		result.NextRefreshAt = account.nextRefreshAtMillis()
+		if refreshErr != nil {
+			result.TokenRefreshStatus = "failed"
+			result.TokenRefreshError = refreshErr.Error()
+			result.Error = refreshErr.Error()
+			result.ActionReason = "刷新令牌失败，保留账号"
+			s.appendLog("warning", fmt.Sprintf("%s 主动刷新令牌失败：%s", account.identity(), refreshErr.Error()))
+			return result, refreshErr
+		}
+		if refreshed {
+			result.TokenRefreshStatus = "success"
+			s.appendLog("success", fmt.Sprintf("%s 主动刷新令牌成功", account.identity()))
+		} else {
+			result.TokenRefreshStatus = ""
+			s.appendLog("warning", fmt.Sprintf("%s 主动刷新令牌未执行", account.identity()))
+		}
+		return result, nil
+	}
+	return accountInspectionResult{}, fmt.Errorf("account not found")
+}
+
+func (s *accountInspectionScheduler) mergeTokenRefreshResultLocked(result accountInspectionResult) {
+	if result.Key == "" {
+		return
+	}
+
+	for index, current := range s.status.Results {
+		if current.Key == result.Key || (current.FileName == result.FileName && current.AuthIndex == result.AuthIndex) {
+			current.Provider = result.Provider
+			current.FileName = result.FileName
+			current.DisplayName = result.DisplayName
+			current.Email = result.Email
+			current.Name = result.Name
+			current.AuthIndex = result.AuthIndex
+			current.Disabled = result.Disabled
+			current.TokenRefreshTriggered = result.TokenRefreshTriggered
+			current.TokenRefreshStatus = result.TokenRefreshStatus
+			current.TokenRefreshError = result.TokenRefreshError
+			current.NextRefreshAt = result.NextRefreshAt
+			s.status.Results[index] = current
+			s.status.Results = limitAccountInspectionResults(sortAccountInspectionResults(s.status.Results), 500)
+			return
+		}
+	}
+
+	s.status.Summary = adjustAccountInspectionSummaryForResult(s.status.Summary, result, 1)
+	s.status.Results = limitAccountInspectionResults(sortAccountInspectionResults(append(s.status.Results, result)), 500)
+}
+
 func (s *accountInspectionScheduler) mergeSingleInspectionResultLocked(result accountInspectionResult) {
 	if result.Key == "" {
 		return
@@ -785,7 +871,13 @@ func (s *accountInspectionScheduler) run(ctx context.Context, cancel context.Can
 	s.status.LastFinishedAt = finishedAt
 	s.status.Summary = summary
 	s.status.Results = limitAccountInspectionResults(results, 500)
-	s.status.Progress.Completed = len(results)
+	completed := s.status.Progress.Completed
+	if state == accountInspectionStateCompleted {
+		completed = len(results)
+	} else if completed > len(results) {
+		completed = len(results)
+	}
+	s.status.Progress.Completed = completed
 	s.status.Progress.InFlight = 0
 	s.status.Progress.Pending = 0
 	if runErr != nil {
@@ -1126,15 +1218,25 @@ func (s *accountInspectionScheduler) inspectAccount(ctx context.Context, account
 		result.Error = "missing auth_index"
 		return result
 	}
-	if refreshed, refreshErr := s.refreshAccountIfDue(ctx, account, refreshLimiter); refreshErr != nil {
+	if refreshed, refreshTriggered, refreshErr := s.refreshAccountIfDue(ctx, account, refreshLimiter); refreshErr != nil {
+		result.TokenRefreshTriggered = refreshTriggered
+		result.TokenRefreshStatus = "failed"
+		result.TokenRefreshError = refreshErr.Error()
+		result.NextRefreshAt = account.nextRefreshAtMillis()
 		result.Error = refreshErr.Error()
 		result.ActionReason = "刷新令牌失败，保留账号"
 		s.appendLog("warning", fmt.Sprintf("%s 刷新令牌失败，保留账号：%s", account.identity(), refreshErr.Error()))
 		return result
+	} else if refreshTriggered {
+		account = refreshed
+		result = account.baseResult()
+		result.TokenRefreshTriggered = true
+		result.TokenRefreshStatus = "success"
 	} else if refreshed.Auth != nil {
 		account = refreshed
 		result = account.baseResult()
 	}
+	result.NextRefreshAt = account.nextRefreshAtMillis()
 	var decision accountInspectionDecision
 	var statusCode *int
 	var err error
@@ -1190,30 +1292,37 @@ func (s *accountInspectionScheduler) inspectAccount(ctx context.Context, account
 	return result
 }
 
-func (s *accountInspectionScheduler) refreshAccountIfDue(ctx context.Context, account accountInspectionAccount, refreshLimiter chan struct{}) (accountInspectionAccount, error) {
+func (s *accountInspectionScheduler) refreshAccountIfDue(ctx context.Context, account accountInspectionAccount, refreshLimiter chan struct{}) (accountInspectionAccount, bool, error) {
 	if account.Auth == nil || account.Auth.ID == "" || s == nil || s.h == nil || s.h.authManager == nil {
-		return account, nil
+		return account, false, nil
 	}
 	if refreshLimiter != nil {
 		select {
 		case refreshLimiter <- struct{}{}:
 			defer func() { <-refreshLimiter }()
 		case <-ctx.Done():
-			return account, ctx.Err()
+			return account, true, ctx.Err()
 		}
 	}
 	updated, refreshed, err := s.h.authManager.RefreshIfDueForInspection(ctx, account.Auth.ID)
 	if err != nil {
-		return account, err
+		return account, true, err
 	}
 	if updated == nil {
-		return account, nil
+		return account, false, nil
 	}
 	refreshedAccount := accountFromAuth(updated)
 	if refreshed {
 		s.appendLog("success", fmt.Sprintf("%s 刷新令牌成功", refreshedAccount.identity()))
 	}
-	return refreshedAccount, nil
+	return refreshedAccount, refreshed, nil
+}
+
+func (account accountInspectionAccount) nextRefreshAtMillis() int64 {
+	if account.Auth == nil || account.Auth.NextRefreshAfter.IsZero() {
+		return 0
+	}
+	return account.Auth.NextRefreshAfter.UnixMilli()
 }
 
 func (account accountInspectionAccount) baseResult() accountInspectionResult {
@@ -1682,9 +1791,37 @@ func (item accountInspectionActionItem) toResult() accountInspectionResult {
 	}
 }
 
+func (s *accountInspectionScheduler) applyManualActionResultLocked(result accountInspectionResult) {
+	if result.Key == "" {
+		result.Key = accountInspectionKey(result.FileName, result.AuthIndex)
+	}
+	for index, current := range s.status.Results {
+		if current.Key == result.Key || (current.FileName == result.FileName && current.AuthIndex == result.AuthIndex) {
+			merged := current
+			merged.Provider = result.Provider
+			merged.FileName = result.FileName
+			merged.DisplayName = result.DisplayName
+			merged.Email = result.Email
+			merged.Name = result.Name
+			merged.AuthIndex = result.AuthIndex
+			merged.Disabled = result.Disabled
+			merged.Executed = result.Executed
+			merged.ExecuteError = result.ExecuteError
+			s.status.Summary = adjustAccountInspectionSummaryForResult(s.status.Summary, current, -1)
+			s.status.Summary = adjustAccountInspectionSummaryForResult(s.status.Summary, merged, 1)
+			s.status.Results[index] = merged
+			s.status.Results = limitAccountInspectionResults(sortAccountInspectionResults(s.status.Results), 500)
+			return
+		}
+	}
+	s.status.Summary = adjustAccountInspectionSummaryForResult(s.status.Summary, result, 1)
+	s.status.Results = limitAccountInspectionResults(sortAccountInspectionResults(append(s.status.Results, result)), 500)
+}
+
 func (s *accountInspectionScheduler) executeManualActions(ctx context.Context, items []accountInspectionActionItem) []accountInspectionActionOutcome {
 	executableItems := dedupeExecutionActionItems(items)
 	outcomes := make([]accountInspectionActionOutcome, len(executableItems))
+	executedResults := make([]accountInspectionResult, len(executableItems))
 	runAccountInspectionWorkers(len(executableItems), accountInspectionMaxDeleteWorkers, nil, func(index int) bool {
 		item := executableItems[index]
 		result := item.toResult()
@@ -1692,14 +1829,35 @@ func (s *accountInspectionScheduler) executeManualActions(ctx context.Context, i
 		outcome := accountInspectionActionOutcome{Action: action, FileName: item.FileName, DisplayName: item.DisplayName, Email: item.Email, Name: item.Name, Provider: item.Provider, AuthIndex: item.AuthIndex}
 		if err := s.executeAction(ctx, result, action); err != nil {
 			outcome.Error = err.Error()
+			result.ExecuteError = err.Error()
 			s.appendLog("error", fmt.Sprintf("%s -> %s 执行失败：%s", resultIdentity(result), action, err.Error()))
 		} else {
 			outcome.Success = true
+			result.Executed = true
+			result.ExecuteError = ""
+			if action == accountInspectionActionDisable {
+				result.Disabled = true
+			}
+			if action == accountInspectionActionEnable {
+				result.Disabled = false
+			}
 			s.appendLog("success", fmt.Sprintf("%s %s 成功", resultIdentity(result), action))
 		}
 		outcomes[index] = outcome
+		executedResults[index] = result
 		return true
 	})
+
+	s.mu.Lock()
+	for _, result := range executedResults {
+		if result.FileName == "" {
+			continue
+		}
+		s.applyManualActionResultLocked(result)
+	}
+	broadcast := s.statusBroadcastLocked(true)
+	s.mu.Unlock()
+	broadcast.send()
 	return outcomes
 }
 
@@ -3038,6 +3196,7 @@ func (h *Handler) RegisterAccountInspectionRoutes(group *gin.RouterGroup) {
 	group.GET("/account-inspection/status", h.GetAccountInspectionStatus)
 	group.POST("/account-inspection/run", h.RunAccountInspection)
 	group.POST("/account-inspection/inspect-one", h.InspectOneAccount)
+	group.POST("/account-inspection/refresh-token", h.RefreshAccountInspectionToken)
 	group.POST("/account-inspection/pause", h.PauseAccountInspection)
 	group.POST("/account-inspection/resume", h.ResumeAccountInspection)
 	group.POST("/account-inspection/stop", h.StopAccountInspection)
@@ -3102,6 +3261,33 @@ func (h *Handler) InspectOneAccount(c *gin.Context) {
 	c.JSON(http.StatusAccepted, scheduler.snapshot())
 }
 
+func (h *Handler) RefreshAccountInspectionToken(c *gin.Context) {
+	scheduler := schedulerForHandler(h)
+	if scheduler == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "account inspection scheduler unavailable"})
+		return
+	}
+	var request accountInspectionRefreshTokenRequest
+	if err := c.ShouldBindJSON(&request); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
+		return
+	}
+	result, err := scheduler.refreshTokenNow(c.Request.Context(), request.Item)
+	scheduler.mu.Lock()
+	if result.Key != "" {
+		scheduler.mergeTokenRefreshResultLocked(result)
+	}
+	broadcast := scheduler.statusBroadcastLocked(true)
+	scheduler.mu.Unlock()
+	broadcast.send()
+	snapshot := scheduler.snapshot()
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{"error": err.Error(), "result": result, "schedule": snapshot["schedule"], "status": snapshot["status"]})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"result": result, "schedule": snapshot["schedule"], "status": snapshot["status"]})
+}
+
 func (h *Handler) PauseAccountInspection(c *gin.Context) {
 	scheduler := schedulerForHandler(h)
 	if scheduler == nil {
@@ -3144,7 +3330,13 @@ func (h *Handler) ExecuteAccountInspectionActions(c *gin.Context) {
 		return
 	}
 	outcomes := scheduler.executeManualActions(c.Request.Context(), request.Items)
-	c.JSON(http.StatusOK, gin.H{"outcomes": outcomes, "summary": summarizeManualActionOutcomes(outcomes), "status": scheduler.snapshot()["status"]})
+	snapshot := scheduler.snapshot()
+	c.JSON(http.StatusOK, gin.H{
+		"outcomes": outcomes,
+		"summary":  summarizeManualActionOutcomes(outcomes),
+		"schedule": snapshot["schedule"],
+		"status":   snapshot["status"],
+	})
 }
 
 func (h *Handler) StreamAccountInspectionLogs(c *gin.Context) {
