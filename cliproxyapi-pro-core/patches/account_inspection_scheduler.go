@@ -69,6 +69,7 @@ type accountInspectionSettings struct {
 	Retries                        int                     `json:"retries"`
 	UsedPercentThreshold           int                     `json:"usedPercentThreshold"`
 	SampleSize                     int                     `json:"sampleSize"`
+	AntigravityDeepProbeEnabled    bool                    `json:"antigravityDeepProbeEnabled"`
 	AutoExecuteQuotaLimitDisable   bool                    `json:"autoExecuteQuotaLimitDisable"`
 	AutoExecuteQuotaRecoveryEnable bool                    `json:"autoExecuteQuotaRecoveryEnable"`
 	AutoExecuteAccountErrorAction  accountInspectionAction `json:"autoExecuteAccountErrorAction"`
@@ -102,6 +103,9 @@ type accountInspectionResult struct {
 	UsedPercent           *float64                `json:"usedPercent"`
 	IsQuota               bool                    `json:"isQuota"`
 	Error                 string                  `json:"error"`
+	DeepProbeTriggered    bool                    `json:"deepProbeTriggered"`
+	DeepProbeStatus       string                  `json:"deepProbeStatus"`
+	DeepProbeError        string                  `json:"deepProbeError"`
 	TokenRefreshTriggered bool                    `json:"tokenRefreshTriggered"`
 	TokenRefreshStatus    string                  `json:"tokenRefreshStatus"`
 	TokenRefreshError     string                  `json:"tokenRefreshError"`
@@ -130,6 +134,8 @@ type accountInspectionRunState string
 
 type accountInspectionStreamMessageType string
 
+type accountInspectionDeepProbeStatus string
+
 type accountInspectionAction string
 
 const (
@@ -144,6 +150,14 @@ const (
 	accountInspectionActionDelete  accountInspectionAction = "delete"
 	accountInspectionActionDisable accountInspectionAction = "disable"
 	accountInspectionActionEnable  accountInspectionAction = "enable"
+)
+
+const (
+	accountInspectionDeepProbeSuccess        accountInspectionDeepProbeStatus = "success"
+	accountInspectionDeepProbeQuota          accountInspectionDeepProbeStatus = "quota"
+	accountInspectionDeepProbeAuthError      accountInspectionDeepProbeStatus = "auth_error"
+	accountInspectionDeepProbeTransientError accountInspectionDeepProbeStatus = "transient_error"
+	accountInspectionDeepProbeSkipped        accountInspectionDeepProbeStatus = "skipped"
 )
 
 const (
@@ -213,10 +227,13 @@ type accountInspectionHTTPResult struct {
 }
 
 type accountInspectionDecision struct {
-	Action       accountInspectionAction
-	ActionReason string
-	UsedPercent  *float64
-	IsQuota      bool
+	Action          accountInspectionAction
+	ActionReason    string
+	UsedPercent     *float64
+	IsQuota         bool
+	Error           string
+	DeepProbeStatus accountInspectionDeepProbeStatus
+	DeepProbeError  string
 }
 
 type accountInspectionActionItem struct {
@@ -319,6 +336,7 @@ func defaultAccountInspectionSettings() accountInspectionSettings {
 		Retries:                        0,
 		UsedPercentThreshold:           100,
 		SampleSize:                     0,
+		AntigravityDeepProbeEnabled:    false,
 		AutoExecuteQuotaLimitDisable:   false,
 		AutoExecuteQuotaRecoveryEnable: false,
 		AutoExecuteAccountErrorAction:  accountInspectionActionNone,
@@ -1276,7 +1294,13 @@ func (s *accountInspectionScheduler) inspectAccount(ctx context.Context, account
 	result.ActionReason = decision.ActionReason
 	result.UsedPercent = decision.UsedPercent
 	result.IsQuota = decision.IsQuota
-	if statusCode != nil {
+	result.Error = decision.Error
+	if decision.DeepProbeStatus != "" {
+		result.DeepProbeTriggered = true
+		result.DeepProbeStatus = string(decision.DeepProbeStatus)
+		result.DeepProbeError = decision.DeepProbeError
+	}
+	if statusCode != nil && decision.DeepProbeStatus != accountInspectionDeepProbeTransientError {
 		s.syncInspectionAuthStatus(ctx, account, *statusCode)
 	}
 	level := "info"
@@ -1424,11 +1448,7 @@ func (s *accountInspectionScheduler) withRetry(ctx context.Context, retries int,
 func (s *accountInspectionScheduler) inspectAntigravity(ctx context.Context, account accountInspectionAccount, settings accountInspectionSettings, appendLog func(string, string)) (accountInspectionDecision, *int, error) {
 	projectID := antigravityProjectID(account.Auth)
 	body := `{"project":"` + escapeJSONString(projectID) + `"}`
-	urls := []string{
-		"https://daily-cloudcode-pa.googleapis.com/v1internal:fetchAvailableModels",
-		"https://daily-cloudcode-pa.sandbox.googleapis.com/v1internal:fetchAvailableModels",
-		"https://cloudcode-pa.googleapis.com/v1internal:fetchAvailableModels",
-	}
+	urls := antigravityQuotaURLs()
 	var priorityStatus *int
 	for _, url := range urls {
 		resp, err := s.withRetry(ctx, settings.Retries, func() (accountInspectionHTTPResult, error) {
@@ -1454,12 +1474,236 @@ func (s *accountInspectionScheduler) inspectAntigravity(ctx context.Context, acc
 		}
 		s.persistQuotaState(ctx, account, quotaSuccessState(map[string]any{"groups": groups}), appendLog)
 		used := antigravityClaudeGptUsedPercent(groups)
-		return quotaDecision(account, used, used != nil, settings.UsedPercentThreshold), status, nil
+		decision := quotaDecision(account, used, used != nil, settings.UsedPercentThreshold)
+		if settings.AntigravityDeepProbeEnabled && antigravityShouldDeepProbe(decision) {
+			return s.applyAntigravityDeepProbe(ctx, account, settings, groups, decision, status)
+		}
+		return decision, status, nil
 	}
 	if priorityStatus != nil {
 		return authErrorDecision(account, *priorityStatus), priorityStatus, nil
 	}
 	return accountInspectionDecision{}, priorityStatus, fmt.Errorf("antigravity quota unavailable")
+}
+
+func antigravityQuotaURLs() []string {
+	return []string{
+		"https://daily-cloudcode-pa.googleapis.com/v1internal:fetchAvailableModels",
+		"https://daily-cloudcode-pa.sandbox.googleapis.com/v1internal:fetchAvailableModels",
+		"https://cloudcode-pa.googleapis.com/v1internal:fetchAvailableModels",
+	}
+}
+
+func antigravityGenerateURLs() []string {
+	return []string{
+		"https://daily-cloudcode-pa.googleapis.com/v1internal:generateContent",
+		"https://daily-cloudcode-pa.sandbox.googleapis.com/v1internal:generateContent",
+		"https://cloudcode-pa.googleapis.com/v1internal:generateContent",
+	}
+}
+
+func antigravityShouldDeepProbe(decision accountInspectionDecision) bool {
+	if decision.UsedPercent == nil || decision.IsQuota {
+		return false
+	}
+	return decision.Action == accountInspectionActionKeep || decision.Action == accountInspectionActionEnable
+}
+
+func (s *accountInspectionScheduler) applyAntigravityDeepProbe(ctx context.Context, account accountInspectionAccount, settings accountInspectionSettings, groups []map[string]any, decision accountInspectionDecision, quotaStatus *int) (accountInspectionDecision, *int, error) {
+	model := selectAntigravityDeepProbeModel(groups)
+	projectID := antigravityProjectID(account.Auth)
+	if model == "" || projectID == "" {
+		decision.DeepProbeStatus = accountInspectionDeepProbeSkipped
+		if model == "" {
+			decision.DeepProbeError = "no available Claude/GPT model for deep probe"
+		} else {
+			decision.DeepProbeError = "missing Antigravity project id"
+		}
+		return decision, quotaStatus, nil
+	}
+
+	body := buildAntigravityDeepProbeBody(projectID, model)
+	var lastStatus *int
+	var lastMessage string
+	for _, url := range antigravityGenerateURLs() {
+		resp, err := s.withRetry(ctx, settings.Retries, func() (accountInspectionHTTPResult, error) {
+			return s.apiCall(ctx, account.Auth, http.MethodPost, url, map[string]string{
+				"Authorization": "Bearer $TOKEN$",
+				"Content-Type":  "application/json",
+				"User-Agent":    s.antigravityUserAgent(),
+			}, body, settings.Timeout)
+		})
+		if err != nil {
+			lastMessage = err.Error()
+			continue
+		}
+		lastStatus = intPtr(resp.StatusCode)
+		probeStatus, probeMessage := classifyAntigravityDeepProbeResponse(resp)
+		switch probeStatus {
+		case accountInspectionDeepProbeSuccess:
+			s.clearInspectionAuthError(ctx, account)
+			decision.DeepProbeStatus = accountInspectionDeepProbeSuccess
+			decision.DeepProbeError = ""
+			return decision, lastStatus, nil
+		case accountInspectionDeepProbeAuthError:
+			s.syncInspectionAuthStatus(ctx, account, resp.StatusCode)
+			probeDecision := authErrorDecision(account, resp.StatusCode)
+			probeDecision.UsedPercent = decision.UsedPercent
+			probeDecision.DeepProbeStatus = accountInspectionDeepProbeAuthError
+			probeDecision.DeepProbeError = probeMessage
+			return probeDecision, lastStatus, nil
+		case accountInspectionDeepProbeQuota:
+			s.clearInspectionAuthError(ctx, account)
+			probeDecision := accountInspectionDecision{Action: accountInspectionActionDisable, ActionReason: "Antigravity 深度检测返回额度不可用，建议禁用账号", UsedPercent: decision.UsedPercent, IsQuota: true, DeepProbeStatus: accountInspectionDeepProbeQuota, DeepProbeError: probeMessage}
+			if account.Disabled {
+				probeDecision.Action = accountInspectionActionKeep
+				probeDecision.ActionReason = "Antigravity 深度检测返回额度不可用，但账号已禁用"
+			}
+			return probeDecision, lastStatus, nil
+		default:
+			lastMessage = probeMessage
+			if resp.StatusCode != http.StatusTooManyRequests && resp.StatusCode < http.StatusInternalServerError {
+				break
+			}
+		}
+	}
+	if lastMessage == "" {
+		lastMessage = "antigravity deep probe unavailable"
+	}
+	s.syncInspectionAuthError(ctx, account, "antigravity_deep_probe_error", lastMessage, statusValue(lastStatus))
+	decision.Action = accountInspectionActionKeep
+	decision.ActionReason = "Antigravity 深度检测临时异常，保留账号"
+	decision.Error = lastMessage
+	decision.DeepProbeStatus = accountInspectionDeepProbeTransientError
+	decision.DeepProbeError = lastMessage
+	return decision, firstStatus(lastStatus, quotaStatus), nil
+}
+
+func selectAntigravityDeepProbeModel(groups []map[string]any) string {
+	priority := []string{"claude-sonnet-4-6", "gpt-oss-120b-medium", "claude-opus-4-6-thinking"}
+	available := make(map[string]struct{})
+	for _, group := range groups {
+		if stringFromAny(group["id"]) != "claude-gpt" {
+			continue
+		}
+		for _, raw := range anySlice(group["models"]) {
+			model := stringFromAny(raw)
+			if model != "" {
+				available[model] = struct{}{}
+			}
+		}
+	}
+	for _, model := range priority {
+		if _, ok := available[model]; ok {
+			return model
+		}
+	}
+	return ""
+}
+
+func buildAntigravityDeepProbeBody(projectID string, model string) string {
+	raw, _ := json.Marshal(map[string]any{
+		"project": projectID,
+		"model":   model,
+		"request": map[string]any{
+			"contents": []map[string]any{{
+				"role":  "user",
+				"parts": []map[string]string{{"text": "ping"}},
+			}},
+			"generationConfig": map[string]any{"maxOutputTokens": 1},
+		},
+	})
+	return string(raw)
+}
+
+func classifyAntigravityDeepProbeResponse(resp accountInspectionHTTPResult) (accountInspectionDeepProbeStatus, string) {
+	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
+		if hasAntigravityGenerateContent(resp.Body) {
+			return accountInspectionDeepProbeSuccess, ""
+		}
+		return accountInspectionDeepProbeTransientError, "Antigravity 深度检测响应为空或格式异常"
+	}
+	message := summarizeInspectionHTTPBody(resp.Body)
+	if message == "" {
+		message = fmt.Sprintf("HTTP %d", resp.StatusCode)
+	}
+	if isAccountErrorStatus(resp.StatusCode) {
+		return accountInspectionDeepProbeAuthError, message
+	}
+	if resp.StatusCode == http.StatusPaymentRequired || isAntigravityQuotaFailure(resp.Body) {
+		return accountInspectionDeepProbeQuota, message
+	}
+	return accountInspectionDeepProbeTransientError, message
+}
+
+func hasAntigravityGenerateContent(body string) bool {
+	var payload map[string]any
+	if err := json.Unmarshal([]byte(body), &payload); err != nil {
+		return false
+	}
+	if candidates, ok := nestedMap(payload, "response")["candidates"].([]any); ok && len(candidates) > 0 {
+		return true
+	}
+	if candidates, ok := payload["candidates"].([]any); ok && len(candidates) > 0 {
+		return true
+	}
+	return false
+}
+
+func isAntigravityQuotaFailure(body string) bool {
+	lower := strings.ToLower(body)
+	if strings.Contains(lower, "quota_exhausted") || strings.Contains(lower, "quota exhausted") || strings.Contains(lower, "limit reached") {
+		return true
+	}
+	var payload map[string]any
+	if err := json.Unmarshal([]byte(body), &payload); err != nil {
+		return false
+	}
+	if !strings.EqualFold(stringFromAny(nestedMap(payload, "error")["status"]), "RESOURCE_EXHAUSTED") {
+		return false
+	}
+	details := anySlice(nestedMap(payload, "error")["details"])
+	for _, raw := range details {
+		detail, ok := raw.(map[string]any)
+		if !ok {
+			continue
+		}
+		if strings.EqualFold(stringFromAny(detail["reason"]), "QUOTA_EXHAUSTED") {
+			return true
+		}
+	}
+	return false
+}
+
+func summarizeInspectionHTTPBody(body string) string {
+	body = strings.TrimSpace(body)
+	if body == "" {
+		return ""
+	}
+	var payload map[string]any
+	if err := json.Unmarshal([]byte(body), &payload); err == nil {
+		if message := nestedString(nestedMap(payload, "error"), "message", ""); message != "" {
+			return message
+		}
+	}
+	if len(body) > 240 {
+		return body[:240]
+	}
+	return body
+}
+
+func statusValue(status *int) int {
+	if status == nil {
+		return 0
+	}
+	return *status
+}
+
+func firstStatus(primary *int, fallback *int) *int {
+	if primary != nil {
+		return primary
+	}
+	return fallback
 }
 
 func (s *accountInspectionScheduler) inspectClaude(ctx context.Context, account accountInspectionAccount, settings accountInspectionSettings, appendLog func(string, string)) (accountInspectionDecision, *int, error) {
@@ -1720,7 +1964,7 @@ func (s *accountInspectionScheduler) clearInspectionAuthError(ctx context.Contex
 	if auth == nil || auth.Status != coreauth.StatusError || auth.LastError == nil {
 		return
 	}
-	if auth.LastError.Code != "inspection_http_error" && auth.LastError.Code != "inspection_probe_error" {
+	if auth.LastError.Code != "inspection_http_error" && auth.LastError.Code != "inspection_probe_error" && auth.LastError.Code != "antigravity_deep_probe_error" {
 		return
 	}
 	if auth.Disabled {
@@ -1953,6 +2197,9 @@ func (s *accountInspectionScheduler) applyAutomaticActions(ctx context.Context, 
 }
 
 func autoActionForResult(result accountInspectionResult, settings accountInspectionSettings) accountInspectionAction {
+	if result.DeepProbeStatus == string(accountInspectionDeepProbeTransientError) {
+		return ""
+	}
 	status := 0
 	if result.StatusCode != nil {
 		status = *result.StatusCode

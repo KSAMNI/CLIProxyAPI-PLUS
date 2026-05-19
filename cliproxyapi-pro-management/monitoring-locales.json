@@ -561,7 +561,16 @@
       "account_inspection_delete_single_confirm_body": "Delete {{account}} from auth files. This cannot be restored from this page.",
       "account_inspection_delete_single_warning": "Confirm the auth file is backed up before deleting.",
       "account_inspection_auto_execute_pending": "Automatic policy results will appear here after the first inspection.",
-      "account_inspection_auto_execution_waiting_title": "Waiting for inspection result"
+      "account_inspection_auto_execution_waiting_title": "Waiting for inspection result",
+      "account_inspection_settings_advanced_section_title": "Advanced Detection",
+      "account_inspection_settings_advanced_section_desc": "Enable stricter availability checks for specific providers.",
+      "account_inspection_settings_antigravity_deep_probe_label": "Antigravity Deep Probe",
+      "account_inspection_settings_antigravity_deep_probe_hint": "When Antigravity quota appears available, send one minimal real request to verify account availability. This adds a small request cost and inspection time.",
+      "account_inspection_deep_probe_success": "Deep probe passed",
+      "account_inspection_deep_probe_quota": "Deep probe: quota unavailable",
+      "account_inspection_deep_probe_auth_error": "Deep probe: auth error",
+      "account_inspection_deep_probe_transient_error": "Deep probe temporary failure",
+      "account_inspection_deep_probe_skipped": "Deep probe skipped"
     },
     "usage_stats": {
       "title": "Usage Statistics",
@@ -1232,7 +1241,16 @@
       "account_inspection_delete_single_confirm_body": "Удалить {{account}} из auth-файлов. На этой странице это действие нельзя отменить.",
       "account_inspection_delete_single_warning": "Перед удалением убедитесь, что auth-файл сохранён в резервной копии.",
       "account_inspection_auto_execute_pending": "Результаты автоматической политики появятся здесь после первой проверки.",
-      "account_inspection_auto_execution_waiting_title": "Ожидание результата проверки"
+      "account_inspection_auto_execution_waiting_title": "Ожидание результата проверки",
+      "account_inspection_settings_advanced_section_title": "Расширенная проверка",
+      "account_inspection_settings_advanced_section_desc": "Включите более строгие проверки доступности для отдельных провайдеров.",
+      "account_inspection_settings_antigravity_deep_probe_label": "Глубокая проверка Antigravity",
+      "account_inspection_settings_antigravity_deep_probe_hint": "Если квота Antigravity выглядит доступной, отправляется один минимальный реальный запрос для проверки доступности аккаунта. Это немного увеличит стоимость запросов и время проверки.",
+      "account_inspection_deep_probe_success": "Глубокая проверка пройдена",
+      "account_inspection_deep_probe_quota": "Глубокая проверка: квота недоступна",
+      "account_inspection_deep_probe_auth_error": "Глубокая проверка: ошибка авторизации",
+      "account_inspection_deep_probe_transient_error": "Временный сбой глубокой проверки",
+      "account_inspection_deep_probe_skipped": "Глубокая проверка пропущена"
     },
     "usage_stats": {
       "title": "Статистика использования",
@@ -1903,7 +1921,16 @@
       "account_inspection_delete_single_confirm_body": "将从认证文件中删除 {{account}}，此页面无法恢复。",
       "account_inspection_delete_single_warning": "删除前请确认认证文件已备份。",
       "account_inspection_auto_execute_pending": "首次巡检完成后，这里会展示自动策略的执行结果。",
-      "account_inspection_auto_execution_waiting_title": "等待巡检结果"
+      "account_inspection_auto_execution_waiting_title": "等待巡检结果",
+      "account_inspection_settings_advanced_section_title": "高级检测",
+      "account_inspection_settings_advanced_section_desc": "为特定提供商启用更严格的可用性检测。",
+      "account_inspection_settings_antigravity_deep_probe_label": "Antigravity 深度检测",
+      "account_inspection_settings_antigravity_deep_probe_hint": "当 Antigravity 配额显示可用时，额外发送一次最小真实请求验证账号是否可用。会增加少量请求成本和巡检耗时。",
+      "account_inspection_deep_probe_success": "深度检测通过",
+      "account_inspection_deep_probe_quota": "深度检测：额度不可用",
+      "account_inspection_deep_probe_auth_error": "深度检测：授权异常",
+      "account_inspection_deep_probe_transient_error": "深度检测临时失败",
+      "account_inspection_deep_probe_skipped": "深度检测已跳过"
     },
     "usage_stats": {
       "title": "使用统计",
@@ -2568,7 +2595,16 @@
       "account_inspection_delete_single_confirm_body": "將從認證檔案中刪除 {{account}}，此頁面無法恢復。",
       "account_inspection_delete_single_warning": "刪除前請確認認證檔案已備份。",
       "account_inspection_auto_execute_pending": "首次巡檢完成後，這裡會顯示自動策略的執行結果。",
-      "account_inspection_auto_execution_waiting_title": "等待巡檢結果"
+      "account_inspection_auto_execution_waiting_title": "等待巡檢結果",
+      "account_inspection_settings_advanced_section_title": "進階檢測",
+      "account_inspection_settings_advanced_section_desc": "為特定提供商啟用更嚴格的可用性檢測。",
+      "account_inspection_settings_antigravity_deep_probe_label": "Antigravity 深度檢測",
+      "account_inspection_settings_antigravity_deep_probe_hint": "當 Antigravity 配額顯示可用時，額外送出一次最小真實請求驗證帳號是否可用。會增加少量請求成本和巡檢耗時。",
+      "account_inspection_deep_probe_success": "深度檢測通過",
+      "account_inspection_deep_probe_quota": "深度檢測：額度不可用",
+      "account_inspection_deep_probe_auth_error": "深度檢測：授權異常",
+      "account_inspection_deep_probe_transient_error": "深度檢測暫時失敗",
+      "account_inspection_deep_probe_skipped": "深度檢測已跳過"
     },
     "usage_stats": {
       "title": "使用統計",

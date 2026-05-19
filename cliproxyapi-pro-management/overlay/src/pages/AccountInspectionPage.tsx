@@ -23,6 +23,7 @@ import {
   hasAccountInspectionAutoExecutePolicies,
   isSuggestedAction,
   loadAccountInspectionConfigurableSettings,
+  normalizeAutoErrorAction,
   saveAccountInspectionConfigurableSettings,
   type AccountInspectionAction,
   type AccountInspectionAutoErrorAction,
@@ -51,7 +52,7 @@ type RunStatus = 'idle' | 'running' | 'paused' | 'success' | 'error';
 
 type ResultHealthStatus = 'healthy' | 'disabled' | 'authInvalid' | 'quotaExhausted' | 'inspectionError' | 'recoverable';
 
-type ResultFilter = 'inspectionError' | 'quotaExhausted' | 'recoverable' | 'highAvailable';
+type ResultFilter = 'pending' | 'inspectionError' | 'quotaExhausted' | 'recoverable' | 'highAvailable';
 
 type ManualAccountInspectionAction = Exclude<AccountInspectionAction, 'keep'>;
 
@@ -93,6 +94,7 @@ type InspectionSettingsDraft = {
   retries: string;
   usedPercentThreshold: string;
   sampleSize: string;
+  antigravityDeepProbeEnabled: boolean;
   autoExecuteQuotaLimitDisable: boolean;
   autoExecuteQuotaRecoveryEnable: boolean;
   autoExecuteAccountErrorAction: AccountInspectionAutoErrorAction;
@@ -100,7 +102,7 @@ type InspectionSettingsDraft = {
 
 type InspectionSettingsDraftField = Exclude<
   keyof InspectionSettingsDraft,
-  'autoExecuteQuotaLimitDisable' | 'autoExecuteQuotaRecoveryEnable' | 'autoExecuteAccountErrorAction'
+  'antigravityDeepProbeEnabled' | 'autoExecuteQuotaLimitDisable' | 'autoExecuteQuotaRecoveryEnable' | 'autoExecuteAccountErrorAction'
 >;
 
 type ScheduleDraft = {
@@ -372,6 +374,20 @@ const healthLabelKey: Record<ResultHealthStatus, string> = {
   recoverable: 'monitoring.account_inspection_health_recoverable',
 };
 
+const deepProbeLabelKey: Record<Exclude<NonNullable<AccountInspectionResultItem['deepProbeStatus']>, ''>, string> = {
+  success: 'monitoring.account_inspection_deep_probe_success',
+  quota: 'monitoring.account_inspection_deep_probe_quota',
+  auth_error: 'monitoring.account_inspection_deep_probe_auth_error',
+  transient_error: 'monitoring.account_inspection_deep_probe_transient_error',
+  skipped: 'monitoring.account_inspection_deep_probe_skipped',
+};
+
+const deepProbeToneClass = (status: AccountInspectionResultItem['deepProbeStatus']) => {
+  if (status === 'success') return styles.statePillGood;
+  if (status === 'quota' || status === 'auth_error' || status === 'transient_error') return styles.statePillBad;
+  return styles.statePillMuted;
+};
+
 const resolveResultHealthStatus = (item: AccountInspectionResultItem): ResultHealthStatus => {
   if (item.error) return 'inspectionError';
   if (item.action === 'delete' || (item.statusCode !== null && [400, 401, 403, 404].includes(item.statusCode))) {
@@ -572,6 +588,7 @@ const toSettingsDraft = (settings: AccountInspectionConfigurableSettings): Inspe
   retries: String(settings.retries),
   usedPercentThreshold: String(settings.usedPercentThreshold),
   sampleSize: String(settings.sampleSize),
+  antigravityDeepProbeEnabled: settings.antigravityDeepProbeEnabled,
   autoExecuteQuotaLimitDisable: settings.autoExecuteQuotaLimitDisable,
   autoExecuteQuotaRecoveryEnable: settings.autoExecuteQuotaRecoveryEnable,
   autoExecuteAccountErrorAction: settings.autoExecuteAccountErrorAction,
@@ -594,6 +611,14 @@ const formatActionLabel = (action: AccountInspectionAction, t: ReturnType<typeof
 const formatQuotaRemainingLabel = (value: number | null) => {
   if (value === null) return '--';
   return `${Math.max(0, 100 - value).toFixed(1)}%`;
+};
+
+const formatDeepProbeLabel = (
+  item: AccountInspectionResultItem,
+  t: ReturnType<typeof useTranslation>['t']
+) => {
+  if (!item.deepProbeTriggered || !item.deepProbeStatus) return '';
+  return t(deepProbeLabelKey[item.deepProbeStatus] ?? 'monitoring.account_inspection_deep_probe_skipped');
 };
 
 const formatTokenRefreshLabel = (
@@ -661,6 +686,10 @@ const formatInspectionVerdictSecondary = (
   t: ReturnType<typeof useTranslation>['t']
 ) => {
   const parts = [formatActionLabel(item.action, t)];
+  if (item.deepProbeTriggered) {
+    const label = formatDeepProbeLabel(item, t);
+    if (label) parts.push(label);
+  }
   if (item.error) {
     parts.push(item.error);
   } else if (item.statusCode !== null && item.statusCode >= 400) {
@@ -858,6 +887,7 @@ const sameInspectionSettings = (left: AccountInspectionConfigurableSettings, rig
   left.retries === right.retries &&
   left.usedPercentThreshold === right.usedPercentThreshold &&
   left.sampleSize === right.sampleSize &&
+  left.antigravityDeepProbeEnabled === right.antigravityDeepProbeEnabled &&
   left.autoExecuteQuotaLimitDisable === right.autoExecuteQuotaLimitDisable &&
   left.autoExecuteQuotaRecoveryEnable === right.autoExecuteQuotaRecoveryEnable &&
   left.autoExecuteAccountErrorAction === right.autoExecuteAccountErrorAction;
@@ -870,6 +900,7 @@ const sameSettingsDraft = (left: InspectionSettingsDraft, right: InspectionSetti
   left.retries === right.retries &&
   left.usedPercentThreshold === right.usedPercentThreshold &&
   left.sampleSize === right.sampleSize &&
+  left.antigravityDeepProbeEnabled === right.antigravityDeepProbeEnabled &&
   left.autoExecuteQuotaLimitDisable === right.autoExecuteQuotaLimitDisable &&
   left.autoExecuteQuotaRecoveryEnable === right.autoExecuteQuotaRecoveryEnable &&
   left.autoExecuteAccountErrorAction === right.autoExecuteAccountErrorAction;
@@ -1380,6 +1411,8 @@ export function AccountInspectionPage() {
     [allResults]
   );
 
+  const hasAutoExecutionPolicy = hasAccountInspectionAutoExecutePolicies(inspectionSettings);
+
   const healthCounts = useMemo(
     () => countHealthStatuses(allResults),
     [allResults]
@@ -1387,6 +1420,8 @@ export function AccountInspectionPage() {
 
   const filteredResults = useMemo(() => {
     switch (resultFilter) {
+      case 'pending':
+        return hasAutoExecutionPolicy ? allResults : actionableResults;
       case 'inspectionError':
         return allResults.filter((item) => {
           const healthStatus = resolveResultHealthStatus(item);
@@ -1404,7 +1439,7 @@ export function AccountInspectionPage() {
       default:
         return allResults;
     }
-  }, [allResults, resultFilter]);
+  }, [actionableResults, allResults, hasAutoExecutionPolicy, resultFilter]);
 
   const filteredLogs = useMemo(
     () => (logLevelFilter === 'all' ? logs : logs.filter((entry) => entry.level === logLevelFilter)),
@@ -1638,7 +1673,6 @@ export function AccountInspectionPage() {
   }, [actionableResults, autoExecutionCounts, result]);
 
   const pendingActionCount = actionableResults.length;
-  const hasAutoExecutionPolicy = hasAccountInspectionAutoExecutePolicies(inspectionSettings);
   const inspectionScopeLabel = inspectionSettings.targetType === ACCOUNT_INSPECTION_ALL_PROVIDER_TYPE
     ? t('monitoring.filter_all_providers')
     : resolveProviderDisplayLabel(inspectionSettings.targetType);
@@ -1688,11 +1722,20 @@ export function AccountInspectionPage() {
       ? t('monitoring.account_inspection_results_error_empty', { defaultValue: 'Unable to complete the inspection. Check logs and retry.' })
       : t('monitoring.account_inspection_empty');
   const resultFilterTabs = useMemo<Array<{ key: ResultFilter; label: string }>>(() => [
+    ...(!hasAutoExecutionPolicy
+      ? [{ key: 'pending' as const, label: t('monitoring.account_inspection_filter_pending') }]
+      : []),
     { key: 'inspectionError', label: t('monitoring.account_inspection_health_inspection_error') },
     { key: 'quotaExhausted', label: t('monitoring.account_inspection_health_quota_exhausted') },
     { key: 'recoverable', label: t('monitoring.account_inspection_health_recoverable') },
     { key: 'highAvailable', label: t('monitoring.account_inspection_high_available') },
-  ], [t]);
+  ], [hasAutoExecutionPolicy, t]);
+
+  useEffect(() => {
+    if (hasAutoExecutionPolicy && resultFilter === 'pending') {
+      setResultFilter('inspectionError');
+    }
+  }, [hasAutoExecutionPolicy, resultFilter]);
   const logLevelOptions = useMemo<Array<{ key: AccountInspectionLogLevel | 'all'; label: string }>>(() => [
     { key: 'all', label: t('monitoring.account_inspection_filter_all') },
     { key: 'success', label: t('monitoring.account_inspection_log_success') },
@@ -1724,6 +1767,13 @@ export function AccountInspectionPage() {
     []
   );
 
+  const handleAntigravityDeepProbeChange = useCallback((value: boolean) => {
+    dispatchBackendState({
+      type: 'updateSettingsDraft',
+      values: { antigravityDeepProbeEnabled: value },
+    });
+  }, []);
+
   const handleAutoExecuteQuotaLimitChange = useCallback((value: boolean) => {
     dispatchBackendState({
       type: 'updateSettingsDraft',
@@ -1742,7 +1792,7 @@ export function AccountInspectionPage() {
     dispatchBackendState({
       type: 'updateSettingsDraft',
       values: {
-        autoExecuteAccountErrorAction: value === 'disable' || value === 'delete' ? value : 'none',
+        autoExecuteAccountErrorAction: normalizeAutoErrorAction(value),
       },
     });
   }, []);
@@ -1812,6 +1862,7 @@ export function AccountInspectionPage() {
           }
           return parsed;
         })(),
+        antigravityDeepProbeEnabled: settingsDraft.antigravityDeepProbeEnabled,
         autoExecuteQuotaLimitDisable: settingsDraft.autoExecuteQuotaLimitDisable,
         autoExecuteQuotaRecoveryEnable: settingsDraft.autoExecuteQuotaRecoveryEnable,
         autoExecuteAccountErrorAction: settingsDraft.autoExecuteAccountErrorAction,
@@ -2194,6 +2245,11 @@ export function AccountInspectionPage() {
                           <td>
                             <div className={styles.verdictCell}>
                               <strong>{formatInspectionVerdictPrimary(item, healthStatus, t)}</strong>
+                              {item.deepProbeTriggered && item.deepProbeStatus ? (
+                                <small className={`${styles.statePill} ${deepProbeToneClass(item.deepProbeStatus)}`} title={item.deepProbeError || undefined}>
+                                  {formatDeepProbeLabel(item, t)}
+                                </small>
+                              ) : null}
                               <span>{formatInspectionVerdictSecondary(item, t)}</span>
                             </div>
                           </td>
@@ -2421,6 +2477,31 @@ export function AccountInspectionPage() {
                 min={SAMPLE_SIZE_LIMITS.min}
                 step={1}
               />
+            </div>
+          </div>
+        </section>
+
+        <section className={styles.settingsSection}>
+          <div className={styles.settingsSectionHeader}>
+            <div>
+              <strong>{t('monitoring.account_inspection_settings_advanced_section_title', { defaultValue: '高级检测' })}</strong>
+              <span>{t('monitoring.account_inspection_settings_advanced_section_desc', { defaultValue: '为特定提供商启用更严格的可用性检测。' })}</span>
+            </div>
+          </div>
+          <div className={styles.settingsPolicyGrid}>
+            <div className={styles.settingsPolicyCard}>
+              <div className={styles.settingsPolicyControl}>
+                <ToggleSwitch
+                  checked={settingsDraft.antigravityDeepProbeEnabled}
+                  onChange={handleAntigravityDeepProbeChange}
+                  label={t('monitoring.account_inspection_settings_antigravity_deep_probe_label', { defaultValue: 'Antigravity 深度检测' })}
+                  ariaLabel={t('monitoring.account_inspection_settings_antigravity_deep_probe_label', { defaultValue: 'Antigravity 深度检测' })}
+                  labelPosition="left"
+                />
+              </div>
+              <span className={styles.settingsHint}>
+                {t('monitoring.account_inspection_settings_antigravity_deep_probe_hint', { defaultValue: '当 Antigravity 配额显示可用时，额外发送一次最小真实请求验证账号是否可用。会增加少量请求成本和巡检耗时。' })}
+              </span>
             </div>
           </div>
         </section>

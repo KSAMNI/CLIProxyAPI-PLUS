@@ -6,6 +6,7 @@ export type AccountInspectionLogLevel = 'info' | 'success' | 'warning' | 'error'
 export type AccountInspectionAction = 'keep' | 'delete' | 'disable' | 'enable';
 export type AccountInspectionExecutionAction = Exclude<AccountInspectionAction, 'keep'>;
 export type AccountInspectionProgressStatus = 'idle' | 'running' | 'paused' | 'stopped' | 'completed';
+export type AccountInspectionDeepProbeStatus = 'success' | 'quota' | 'auth_error' | 'transient_error' | 'skipped' | '';
 export type AccountInspectionAutoErrorAction = 'none' | 'disable' | 'delete';
 
 export interface AccountInspectionSettings {
@@ -28,6 +29,7 @@ export interface AccountInspectionConfigurableSettings {
   retries: number;
   usedPercentThreshold: number;
   sampleSize: number;
+  antigravityDeepProbeEnabled: boolean;
   autoExecuteQuotaLimitDisable: boolean;
   autoExecuteQuotaRecoveryEnable: boolean;
   autoExecuteAccountErrorAction: AccountInspectionAutoErrorAction;
@@ -55,6 +57,9 @@ export interface AccountInspectionResultItem extends AccountInspectionAccount {
   usedPercent: number | null;
   isQuota: boolean;
   error: string;
+  deepProbeTriggered?: boolean;
+  deepProbeStatus?: AccountInspectionDeepProbeStatus;
+  deepProbeError?: string;
   tokenRefreshTriggered?: boolean;
   tokenRefreshStatus?: 'success' | 'failed' | '';
   tokenRefreshError?: string;
@@ -213,6 +218,7 @@ export const DEFAULT_ACCOUNT_INSPECTION_SETTINGS: AccountInspectionConfigurableS
   retries: 0,
   usedPercentThreshold: 100,
   sampleSize: 0,
+  antigravityDeepProbeEnabled: false,
   autoExecuteQuotaLimitDisable: false,
   autoExecuteQuotaRecoveryEnable: false,
   autoExecuteAccountErrorAction: 'none',
@@ -247,7 +253,7 @@ const normalizeThreshold = (value: number | undefined) => {
   return value;
 };
 
-const normalizeAutoErrorAction = (value: unknown): AccountInspectionAutoErrorAction => {
+export const normalizeAutoErrorAction = (value: unknown): AccountInspectionAutoErrorAction => {
   const normalized = readStringValue(value).toLowerCase();
   return normalized === 'disable' || normalized === 'delete' ? normalized : 'none';
 };
@@ -312,6 +318,7 @@ const readConfigurableSettingsFromConfig = (
     autoExecuteQuotaLimitDisable: undefined,
     autoExecuteQuotaRecoveryEnable: undefined,
     autoExecuteAccountErrorAction: undefined,
+    antigravityDeepProbeEnabled: undefined,
   };
 };
 
@@ -367,6 +374,10 @@ const normalizeConfigurableSettings = (
     autoExecuteQuotaRecoveryEnable: readBooleanValue(
       merged.autoExecuteQuotaRecoveryEnable,
       DEFAULT_ACCOUNT_INSPECTION_SETTINGS.autoExecuteQuotaRecoveryEnable
+    ),
+    antigravityDeepProbeEnabled: readBooleanValue(
+      merged.antigravityDeepProbeEnabled,
+      DEFAULT_ACCOUNT_INSPECTION_SETTINGS.antigravityDeepProbeEnabled
     ),
     autoExecuteAccountErrorAction: normalizeAutoErrorAction(merged.autoExecuteAccountErrorAction),
   };
@@ -503,6 +514,9 @@ export const accountInspectionBackendResultToItem = (
   usedPercent: item.usedPercent ?? null,
   isQuota: item.isQuota,
   error: item.executeError || item.error || '',
+  deepProbeTriggered: item.deepProbeTriggered ?? false,
+  deepProbeStatus: item.deepProbeStatus ?? '',
+  deepProbeError: item.deepProbeError ?? '',
   tokenRefreshTriggered: item.tokenRefreshTriggered ?? false,
   tokenRefreshStatus: item.tokenRefreshStatus ?? '',
   tokenRefreshError: item.tokenRefreshError ?? '',
