@@ -324,20 +324,29 @@ func (s *Server) handleUsageImport(c *gin.Context) {
 	})
 }
 
-func parseAccountInspectionScheduleImportRecord(raw []byte) (json.RawMessage, bool, error) {
+func parseTypedImportRecord[T any](raw []byte, recordType string) (T, bool, error) {
+	var zero T
 	var header struct {
 		RecordType string `json:"record_type"`
 	}
 	if err := json.Unmarshal(raw, &header); err != nil {
-		return nil, false, err
+		return zero, false, err
 	}
-	if header.RecordType != accountInspectionScheduleExportRecordType {
-		return nil, false, nil
+	if header.RecordType != recordType {
+		return zero, false, nil
 	}
 
-	var record accountInspectionScheduleExportRecord
+	var record T
 	if err := json.Unmarshal(raw, &record); err != nil {
-		return nil, true, err
+		return zero, true, err
+	}
+	return record, true, nil
+}
+
+func parseAccountInspectionScheduleImportRecord(raw []byte) (json.RawMessage, bool, error) {
+	record, ok, err := parseTypedImportRecord[accountInspectionScheduleExportRecord](raw, accountInspectionScheduleExportRecordType)
+	if err != nil || !ok {
+		return nil, ok, err
 	}
 	if len(record.Schedule) == 0 {
 		return nil, true, nil
@@ -346,37 +355,17 @@ func parseAccountInspectionScheduleImportRecord(raw []byte) (json.RawMessage, bo
 }
 
 func parseQuotaCacheImportRecord(raw []byte) ([]QuotaCacheEntry, bool, error) {
-	var header struct {
-		RecordType string `json:"record_type"`
-	}
-	if err := json.Unmarshal(raw, &header); err != nil {
-		return nil, false, err
-	}
-	if header.RecordType != quotaCacheExportRecordType {
-		return nil, false, nil
-	}
-
-	var record quotaCacheExportRecord
-	if err := json.Unmarshal(raw, &record); err != nil {
-		return nil, true, err
+	record, ok, err := parseTypedImportRecord[quotaCacheExportRecord](raw, quotaCacheExportRecordType)
+	if err != nil || !ok {
+		return nil, ok, err
 	}
 	return record.Entries, true, nil
 }
 
 func parseModelPricesImportRecord(raw []byte) (map[string]ModelPrice, bool, error) {
-	var header struct {
-		RecordType string `json:"record_type"`
-	}
-	if err := json.Unmarshal(raw, &header); err != nil {
-		return nil, false, err
-	}
-	if header.RecordType != modelPricesExportRecordType {
-		return nil, false, nil
-	}
-
-	var record modelPricesExportRecord
-	if err := json.Unmarshal(raw, &record); err != nil {
-		return nil, true, err
+	record, ok, err := parseTypedImportRecord[modelPricesExportRecord](raw, modelPricesExportRecordType)
+	if err != nil || !ok {
+		return nil, ok, err
 	}
 	if record.Prices == nil {
 		record.Prices = map[string]ModelPrice{}

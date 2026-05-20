@@ -489,16 +489,20 @@ func (s *accountInspectionScheduler) streamStatusLocked(includeDetails bool) acc
 	return status
 }
 
+func (s *accountInspectionScheduler) streamMessageLocked(messageType accountInspectionStreamMessageType, includeDetails bool, logEntry *accountInspectionLogEntry) accountInspectionLogStreamMessage {
+	return accountInspectionLogStreamMessage{Type: messageType, Schedule: s.schedule, Status: s.streamStatusLocked(includeDetails), Log: logEntry}
+}
+
 func (s *accountInspectionScheduler) snapshotStreamMessageLocked() accountInspectionLogStreamMessage {
-	return accountInspectionLogStreamMessage{Type: accountInspectionStreamSnapshot, Schedule: s.schedule, Status: s.streamStatusLocked(true)}
+	return s.streamMessageLocked(accountInspectionStreamSnapshot, true, nil)
 }
 
 func (s *accountInspectionScheduler) statusStreamMessageLocked(snapshot bool) accountInspectionLogStreamMessage {
-	return accountInspectionLogStreamMessage{Type: accountInspectionStreamStatus, Schedule: s.schedule, Status: s.streamStatusLocked(snapshot)}
+	return s.streamMessageLocked(accountInspectionStreamStatus, snapshot, nil)
 }
 
 func (s *accountInspectionScheduler) logStreamMessageLocked(entry accountInspectionLogEntry) accountInspectionLogStreamMessage {
-	return accountInspectionLogStreamMessage{Type: accountInspectionStreamLog, Schedule: s.schedule, Status: s.streamStatusLocked(false), Log: &entry}
+	return s.streamMessageLocked(accountInspectionStreamLog, false, &entry)
 }
 
 type accountInspectionBroadcast struct {

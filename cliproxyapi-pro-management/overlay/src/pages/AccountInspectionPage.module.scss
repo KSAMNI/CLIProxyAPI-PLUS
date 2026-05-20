@@ -944,6 +944,23 @@
   text-overflow: ellipsis;
 }
 
+.inspectionNextRunText {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+  min-width: 0;
+  color: var(--inspect-muted);
+  font-size: 12px;
+  line-height: 1.35;
+  text-align: right;
+}
+
+.inspectionNextRunText strong {
+  color: var(--inspect-ink);
+  font-weight: 750;
+}
+
 .inspectionControlCard {
   gap: 12px;
   border-color: color-mix(in srgb, var(--inspect-line-strong) 84%, transparent);
@@ -1030,7 +1047,7 @@
 
 .resultOverviewGrid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 8px;
 }
 

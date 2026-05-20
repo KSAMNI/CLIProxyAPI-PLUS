@@ -28,6 +28,7 @@ class QuotaPersistenceMiddleware {
   private reloadRequestedAt = 0;
   private preloadPromise: Promise<void> | null = null;
   private ensureFreshPromise: Promise<void> | null = null;
+  private lastQuotaMaps = new Map<QuotaProviderType, Record<string, QuotaStatusState>>();
 
   /**
    * Start the middleware
@@ -51,15 +52,15 @@ class QuotaPersistenceMiddleware {
       console.log('QuotaPersistenceMiddleware: Cache preloaded');
     });
 
-    // Subscribe to store changes
     this.unsubscribe = useQuotaStore.subscribe((state) => {
-      if (this.isPreloading) return; // Skip during preload to avoid circular updates
+      if (this.isPreloading) return;
 
-      this.syncProvider('antigravity', state.antigravityQuota);
-      this.syncProvider('claude', state.claudeQuota);
-      this.syncProvider('codex', state.codexQuota);
-      this.syncProvider('gemini-cli', state.geminiCliQuota);
-      this.syncProvider('kimi', state.kimiQuota);
+      QUOTA_PROVIDER_TYPES.forEach((provider) => {
+        const quotaMap = this.getQuotaMap(state, provider);
+        if (!quotaMap || this.lastQuotaMaps.get(provider) === quotaMap) return;
+        this.lastQuotaMaps.set(provider, quotaMap);
+        this.syncProvider(provider, quotaMap);
+      });
     });
 
     console.log('QuotaPersistenceMiddleware: Started successfully');
@@ -73,6 +74,7 @@ class QuotaPersistenceMiddleware {
       this.unsubscribe();
       this.unsubscribe = null;
     }
+    this.lastQuotaMaps.clear();
     void this.flushSyncQueue();
     console.log('QuotaPersistenceMiddleware: Stopped');
   }
@@ -104,6 +106,7 @@ class QuotaPersistenceMiddleware {
     provider: QuotaProviderType,
     quotaMap: Record<string, QuotaStatusState>
   ) {
+    let changed = false;
     Object.entries(quotaMap).forEach(([fileName, state]) => {
       if (state.status !== 'success') return;
 
@@ -111,9 +114,10 @@ class QuotaPersistenceMiddleware {
       const version = state.cachedAt ?? 0;
       if (this.syncedVersions.get(key) === version) return;
       this.syncQueue.add(key);
+      changed = true;
     });
 
-    void this.flushSyncQueue();
+    if (changed) void this.flushSyncQueue();
   }
 
   /**

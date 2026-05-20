@@ -55,7 +55,7 @@ type RunStatus = 'idle' | 'running' | 'paused' | 'success' | 'error';
 
 type ResultHealthStatus = 'healthy' | 'disabled' | 'authInvalid' | 'quotaExhausted' | 'inspectionError' | 'recoverable';
 
-type ResultFilter = 'pending' | 'inspectionError' | 'quotaExhausted' | 'recoverable' | 'highAvailable';
+type ResultFilter = 'pending' | 'accountInvalid' | 'requestError' | 'quotaExhausted' | 'recoverable' | 'highAvailable';
 
 type SettingsSectionKey = 'plan' | 'scope' | 'runtime' | 'antigravity' | 'auto';
 
@@ -207,7 +207,8 @@ const emptyAutoExecutionCounts = (): AutoExecutionCounts => ({
 
 const createEmptyFilterRows = (): Record<ResultFilter, InspectionResultViewRow[]> => ({
   pending: [],
-  inspectionError: [],
+  accountInvalid: [],
+  requestError: [],
   quotaExhausted: [],
   recoverable: [],
   highAvailable: [],
@@ -400,9 +401,9 @@ const healthToneClass: Record<ResultHealthStatus, string> = {
 const healthLabelKey: Record<ResultHealthStatus, string> = {
   healthy: 'monitoring.account_inspection_health_healthy',
   disabled: 'monitoring.account_inspection_health_disabled',
-  authInvalid: 'monitoring.account_inspection_health_auth_invalid',
+  authInvalid: 'monitoring.account_inspection_account_invalid',
   quotaExhausted: 'monitoring.account_inspection_health_quota_exhausted',
-  inspectionError: 'monitoring.account_inspection_health_inspection_error',
+  inspectionError: 'monitoring.account_inspection_account_request_error',
   recoverable: 'monitoring.account_inspection_health_recoverable',
 };
 
@@ -415,10 +416,10 @@ const deepProbeLabelKey: Record<Exclude<NonNullable<AccountInspectionResultItem[
 };
 
 const resolveResultHealthStatus = (item: AccountInspectionResultItem): ResultHealthStatus => {
-  if (item.error) return 'inspectionError';
-  if (item.action === 'delete' || (item.statusCode !== null && [400, 401, 403, 404].includes(item.statusCode))) {
+  if (item.action === 'delete' || (item.statusCode !== null && ACCOUNT_INVALID_ERROR_STATUSES.has(item.statusCode))) {
     return 'authInvalid';
   }
+  if (item.error) return 'inspectionError';
   if (item.isQuota || item.action === 'disable') return 'quotaExhausted';
   if (item.action === 'enable') return 'recoverable';
   if (item.disabled) return 'disabled';
@@ -639,7 +640,7 @@ const buildInspectionResultsViewState = (items: AccountInspectionResultItem[]): 
         break;
       case 'authInvalid':
         healthCounts.authInvalid += 1;
-        filterRows.inspectionError.push(row);
+        filterRows.accountInvalid.push(row);
         break;
       case 'quotaExhausted':
         healthCounts.quotaExhausted += 1;
@@ -647,7 +648,7 @@ const buildInspectionResultsViewState = (items: AccountInspectionResultItem[]): 
         break;
       case 'inspectionError':
         healthCounts.inspectionError += 1;
-        filterRows.inspectionError.push(row);
+        filterRows.requestError.push(row);
         break;
       case 'recoverable':
         healthCounts.recoverable += 1;
@@ -1254,7 +1255,7 @@ export function AccountInspectionPage() {
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
   const [scheduleLoading, setScheduleLoading] = useState(false);
   const [logsCollapsed, setLogsCollapsed] = useState(false);
-  const [resultFilter, setResultFilter] = useState<ResultFilter>('inspectionError');
+  const [resultFilter, setResultFilter] = useState<ResultFilter>('accountInvalid');
   const [logLevelFilter, setLogLevelFilter] = useState<AccountInspectionLogLevel | 'all'>('all');
   const [authFiles, setAuthFiles] = useState<AuthFileItem[]>([]);
   const [authFilesLoaded, setAuthFilesLoaded] = useState(false);
@@ -1855,7 +1856,8 @@ export function AccountInspectionPage() {
     ...(!hasAutoExecutionPolicy
       ? [{ key: 'pending' as const, label: t('monitoring.account_inspection_filter_pending') }]
       : []),
-    { key: 'inspectionError', label: t('monitoring.account_inspection_health_inspection_error') },
+    { key: 'accountInvalid', label: t('monitoring.account_inspection_account_invalid') },
+    { key: 'requestError', label: t('monitoring.account_inspection_account_request_error') },
     { key: 'quotaExhausted', label: t('monitoring.account_inspection_health_quota_exhausted') },
     { key: 'recoverable', label: t('monitoring.account_inspection_health_recoverable') },
     { key: 'highAvailable', label: t('monitoring.account_inspection_high_available') },
@@ -1863,7 +1865,7 @@ export function AccountInspectionPage() {
 
   useEffect(() => {
     if (hasAutoExecutionPolicy && resultFilter === 'pending') {
-      setResultFilter('inspectionError');
+      setResultFilter('accountInvalid');
     }
   }, [hasAutoExecutionPolicy, resultFilter]);
   const logLevelOptions = useMemo<Array<{ key: AccountInspectionLogLevel | 'all'; label: string }>>(() => [
@@ -2198,14 +2200,14 @@ export function AccountInspectionPage() {
             <h2>{t('monitoring.account_inspection_control_title')}</h2>
             <p>{t('monitoring.account_inspection_control_desc')}</p>
           </div>
-          <button
-            type="button"
-            className={styles.foldButton}
+          <Button
+            variant="secondary"
+            className={styles.heroActionButton}
             onClick={openSettingsModal}
             disabled={(runStatus === 'running' || runStatus === 'paused') || executing}
           >
             {t('monitoring.account_inspection_settings_button')}
-          </button>
+          </Button>
         </div>
         <div className={styles.inspectionOperationGrid}>
           <div className={styles.operationMainColumn}>
@@ -2254,10 +2256,10 @@ export function AccountInspectionPage() {
                     <small>{t('monitoring.account_inspection_request_error_action_short')}</small>
                     <strong>{requestErrorActionLabel}</strong>
                   </span>
-                  <span>
-                    <small>{t('monitoring.account_inspection_next_execution_short')}</small>
-                    <strong>{schedule?.enabled && schedule.nextRunAt ? formatTimestamp(schedule.nextRunAt, i18n.language) : '--'}</strong>
-                  </span>
+                </div>
+                <div className={styles.inspectionNextRunText}>
+                  <span>{t('monitoring.account_inspection_next_execution_short')}</span>
+                  <strong>{schedule?.enabled && schedule.nextRunAt ? formatTimestamp(schedule.nextRunAt, i18n.language) : '--'}</strong>
                 </div>
               </Card>
 
@@ -2287,21 +2289,29 @@ export function AccountInspectionPage() {
             <div className={styles.resultOverviewSection}>
               <h3>{t('monitoring.account_inspection_inspection_summary_title')}</h3>
               <div className={styles.resultOverviewGrid}>
-                <span className={styles.resultOverviewBad}>
-                  <small>{t('monitoring.account_inspection_health_inspection_error')}</small>
-                  <strong>{healthCounts.inspectionError + healthCounts.authInvalid}</strong>
+                <span>
+                  <small>{t('monitoring.account_inspection_result_total')}</small>
+                  <strong>{healthCounts.total}</strong>
                 </span>
-                <span className={styles.resultOverviewWarn}>
-                  <small>{t('monitoring.account_inspection_health_quota_exhausted')}</small>
-                  <strong>{healthCounts.quotaExhausted}</strong>
+                <span className={styles.resultOverviewGood}>
+                  <small>{t('monitoring.account_inspection_high_available')}</small>
+                  <strong>{healthCounts.healthy}</strong>
                 </span>
                 <span>
                   <small>{t('monitoring.account_inspection_health_recoverable')}</small>
                   <strong>{healthCounts.recoverable}</strong>
                 </span>
-                <span className={styles.resultOverviewGood}>
-                  <small>{t('monitoring.account_inspection_high_available')}</small>
-                  <strong>{healthCounts.healthy}</strong>
+                <span className={styles.resultOverviewWarn}>
+                  <small>{t('monitoring.account_inspection_health_quota_exhausted')}</small>
+                  <strong>{healthCounts.quotaExhausted}</strong>
+                </span>
+                <span className={styles.resultOverviewBad}>
+                  <small>{t('monitoring.account_inspection_account_invalid')}</small>
+                  <strong>{healthCounts.authInvalid}</strong>
+                </span>
+                <span className={styles.resultOverviewBad}>
+                  <small>{t('monitoring.account_inspection_account_request_error')}</small>
+                  <strong>{healthCounts.inspectionError}</strong>
                 </span>
               </div>
             </div>
@@ -2310,7 +2320,7 @@ export function AccountInspectionPage() {
               <div className={styles.strategyResultSection}>
                 <div className={styles.strategySectionHeader}>
                   <h3>{t('monitoring.account_inspection_auto_execution_breakdown')}</h3>
-                  {result ? <button type="button" onClick={() => showInspectionResults('inspectionError')}>{t('monitoring.account_inspection_view_results')}</button> : null}
+                  {result ? <button type="button" onClick={() => showInspectionResults('accountInvalid')}>{t('monitoring.account_inspection_view_results')}</button> : null}
                 </div>
                 {result ? (
                   <>

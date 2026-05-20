@@ -152,6 +152,13 @@ replace_once(
     f'  panel-github-repository: "{PRO_PANEL_REPOSITORY}"',
 )
 
+insert_before(
+    config_go,
+    '// NormalizeCommentIndentation removes indentation from standalone YAML comment lines to keep them left aligned.\n',
+    '// SaveConfigPreserveCommentsUpdateNestedBoolScalar updates a nested bool scalar while preserving comments and positions.\nfunc SaveConfigPreserveCommentsUpdateNestedBoolScalar(configFile string, path []string, value bool) error {\n\tdata, err := os.ReadFile(configFile)\n\tif err != nil {\n\t\treturn err\n\t}\n\tvar root yaml.Node\n\tif err = yaml.Unmarshal(data, &root); err != nil {\n\t\treturn err\n\t}\n\tif root.Kind != yaml.DocumentNode || len(root.Content) == 0 {\n\t\treturn fmt.Errorf("invalid yaml document structure")\n\t}\n\tnode := root.Content[0]\n\tfor i, key := range path {\n\t\tif i == len(path)-1 {\n\t\t\tv := getOrCreateMapValue(node, key)\n\t\t\tv.Kind = yaml.ScalarNode\n\t\t\tv.Tag = "!!bool"\n\t\t\tif value {\n\t\t\t\tv.Value = "true"\n\t\t\t} else {\n\t\t\t\tv.Value = "false"\n\t\t\t}\n\t\t} else {\n\t\t\tnext := getOrCreateMapValue(node, key)\n\t\t\tif next.Kind != yaml.MappingNode {\n\t\t\t\tnext.Kind = yaml.MappingNode\n\t\t\t\tnext.Tag = "!!map"\n\t\t\t}\n\t\t\tnode = next\n\t\t}\n\t}\n\tf, err := os.Create(configFile)\n\tif err != nil {\n\t\treturn err\n\t}\n\tdefer func() { _ = f.Close() }()\n\tvar buf bytes.Buffer\n\tenc := yaml.NewEncoder(&buf)\n\tenc.SetIndent(2)\n\tif err = enc.Encode(&root); err != nil {\n\t\t_ = enc.Close()\n\t\treturn err\n\t}\n\tif err = enc.Close(); err != nil {\n\t\treturn err\n\t}\n\tdata = NormalizeCommentIndentation(buf.Bytes())\n\t_, err = f.Write(data)\n\treturn err\n}\n\n',
+    'func SaveConfigPreserveCommentsUpdateNestedBoolScalar',
+)
+
 updater = ROOT / 'internal/managementasset/updater.go'
 replace_once(
     updater,
@@ -281,6 +288,12 @@ replace_once(
 
 run = ROOT / 'internal/cmd/run.go'
 add_go_import(run, '"' + import_path('internal/config') + '"\n', '\t"' + import_path('internal/embeddedusage') + '"\n')
+insert_before(
+    run,
+    '// StartService builds and runs the proxy service using the exported SDK.\n',
+    'func applyProRequiredStartupConfig(cfg *config.Config, configPath string) {\n\tif cfg == nil {\n\t\treturn\n\t}\n\tcfg.UsageStatisticsEnabled = true\n\tcfg.RemoteManagement.PanelGitHubRepository = config.DefaultPanelGitHubRepository\n\tif configPath == "" {\n\t\treturn\n\t}\n\tif err := config.SaveConfigPreserveCommentsUpdateNestedBoolScalar(configPath, []string{"usage-statistics-enabled"}, true); err != nil {\n\t\tlog.Warnf("failed to persist usage statistics config: %v", err)\n\t}\n\tif err := config.SaveConfigPreserveCommentsUpdateNestedScalar(configPath, []string{"remote-management", "panel-github-repository"}, config.DefaultPanelGitHubRepository); err != nil {\n\t\tlog.Warnf("failed to persist panel repository config: %v", err)\n\t}\n}\n\n',
+    'func applyProRequiredStartupConfig',
+)
 insert_before_nth(
     run,
     '''\tservice, err := builder.Build()
@@ -292,9 +305,7 @@ insert_before_nth(
 \t\treturn cancelFn, doneCh
 \t}
 \tembeddedusage.SetDefaultService(usageService)
-\tif usageService != nil {
-\t\tcfg.UsageStatisticsEnabled = true
-\t}
+\tapplyProRequiredStartupConfig(cfg, configPath)
 
 ''',
     2,
@@ -310,9 +321,7 @@ insert_before_nth(
 \t\treturn
 \t}
 \tembeddedusage.SetDefaultService(usageService)
-\tif usageService != nil {
-\t\tcfg.UsageStatisticsEnabled = true
-\t}
+\tapplyProRequiredStartupConfig(cfg, configPath)
 
 ''',
     1,

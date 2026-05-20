@@ -58,6 +58,7 @@ const KEY_LIKE_TOKEN_REGEX =
   /(sk-[A-Za-z0-9-_]{6,}|sk-ant-[A-Za-z0-9-_]{6,}|AIza[0-9A-Za-z-_]{8,}|AI[a-zA-Z0-9_-]{6,}|hf_[A-Za-z0-9]{6,}|pk_[A-Za-z0-9]{6,}|rk_[A-Za-z0-9]{6,})/;
 const MASKED_TOKEN_HINT_REGEX = /^[^\s]{1,24}(\*{2,}|\.{3})[^\s]{1,24}$/;
 
+const KEY_FINGERPRINT_CACHE_LIMIT = 2048;
 const keyFingerprintCache = new Map<string, string>();
 const usageDetailsCache = new WeakMap<object, UsageDetail[]>();
 const usageDetailsWithEndpointCache = new WeakMap<object, UsageDetailWithEndpoint[]>();
@@ -90,6 +91,10 @@ const fnv1a64Hex = (value: string): string => {
   }
 
   const hex = hash.toString(16).padStart(16, '0');
+  if (keyFingerprintCache.size >= KEY_FINGERPRINT_CACHE_LIMIT) {
+    const oldestKey = keyFingerprintCache.keys().next().value;
+    if (oldestKey) keyFingerprintCache.delete(oldestKey);
+  }
   keyFingerprintCache.set(value, hex);
   return hex;
 };
