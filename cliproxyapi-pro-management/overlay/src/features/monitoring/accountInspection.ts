@@ -469,25 +469,48 @@ const sortResults = (items: AccountInspectionResultItem[]) =>
       left.key.localeCompare(right.key)
   );
 
-const buildPlannedActionPreview = (results: AccountInspectionResultItem[]) =>
-  results
-    .filter((item) => item.action !== 'keep')
-    .slice(0, 10)
-    .map((item) => `${formatAccountInspectionIdentity(item)} -> ${item.action}`);
-
 const summarizeResults = (results: AccountInspectionResultItem[]) => {
-  const deleteCount = results.filter((item) => item.action === 'delete').length;
-  const disableCount = results.filter((item) => item.action === 'disable').length;
-  const enableCount = results.filter((item) => item.action === 'enable').length;
-  const errorCount = results.filter((item) => item.error).length;
-  return {
-    deleteCount,
-    disableCount,
-    enableCount,
-    keepCount: results.length - deleteCount - disableCount - enableCount,
-    errorCount,
-    plannedActionPreview: buildPlannedActionPreview(results),
+  const summary = {
+    deleteCount: 0,
+    disableCount: 0,
+    enableCount: 0,
+    keepCount: 0,
+    errorCount: 0,
+    disabledCount: 0,
+    enabledCount: 0,
+    plannedActionPreview: [] as string[],
   };
+
+  results.forEach((item) => {
+    if (item.disabled) {
+      summary.disabledCount += 1;
+    } else {
+      summary.enabledCount += 1;
+    }
+    if (item.error) summary.errorCount += 1;
+
+    switch (item.action) {
+      case 'delete':
+        summary.deleteCount += 1;
+        break;
+      case 'disable':
+        summary.disableCount += 1;
+        break;
+      case 'enable':
+        summary.enableCount += 1;
+        break;
+      case 'keep':
+      default:
+        summary.keepCount += 1;
+        break;
+    }
+
+    if (item.action !== 'keep' && summary.plannedActionPreview.length < 10) {
+      summary.plannedActionPreview.push(`${formatAccountInspectionIdentity(item)} -> ${item.action}`);
+    }
+  });
+
+  return summary;
 };
 
 export const createIdleAccountInspectionProgressSnapshot = (): AccountInspectionProgressSnapshot => ({
@@ -583,13 +606,14 @@ const buildAccountInspectionBackendRunResult = (
   if (results.length === 0 && response.status.lastFinishedAt <= 0) return null;
 
   const settings = normalizeConfigurableSettings(response.schedule.settings);
+  const summary = summarizeResults(results);
   return {
     results,
     summary: {
       ...response.status.summary,
       usedPercentThreshold: settings.usedPercentThreshold,
       sampled: settings.sampleSize > 0,
-      plannedActionPreview: buildPlannedActionPreview(results),
+      plannedActionPreview: summary.plannedActionPreview,
     },
     startedAt,
     finishedAt,
@@ -605,7 +629,8 @@ export const buildAccountInspectionBackendViewState = (
   const finishedAt = response.status.lastFinishedAt || startedAt;
   const results = (response.status.results ?? []).map(accountInspectionBackendResultToItem);
   const progressStatus = accountInspectionBackendProgressStatus(response.status);
-  const total = response.status.progress?.total ?? response.status.summary.sampledCount ?? results.length;
+  const summaryTotal = response.status.summary.sampledCount || results.length;
+  const total = response.status.progress?.total || summaryTotal;
   const isBackendActive = response.status.state === 'running' || response.status.state === 'paused' || response.status.state === 'stopping';
   const completed = response.status.progress?.completed ?? (isBackendActive ? 0 : total);
   const inFlight = response.status.progress?.inFlight ?? (response.status.state === 'running' ? 1 : 0);
@@ -707,8 +732,6 @@ export const applyAccountInspectionExecutionResult = (
     results: nextResults,
     summary: {
       ...previousResult.summary,
-      disabledCount: nextResults.filter((item) => item.disabled).length,
-      enabledCount: nextResults.filter((item) => !item.disabled).length,
       ...summary,
     },
     finishedAt: Date.now(),

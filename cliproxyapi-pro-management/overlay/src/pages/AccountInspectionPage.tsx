@@ -2200,14 +2200,16 @@ export function AccountInspectionPage() {
             <h2>{t('monitoring.account_inspection_control_title')}</h2>
             <p>{t('monitoring.account_inspection_control_desc')}</p>
           </div>
-          <Button
-            variant="secondary"
-            className={styles.heroActionButton}
-            onClick={openSettingsModal}
-            disabled={(runStatus === 'running' || runStatus === 'paused') || executing}
-          >
-            {t('monitoring.account_inspection_settings_button')}
-          </Button>
+          <div className={styles.heroActions}>
+            <Button
+              variant="secondary"
+              className={styles.heroActionButton}
+              onClick={openSettingsModal}
+              disabled={(runStatus === 'running' || runStatus === 'paused') || executing}
+            >
+              {t('monitoring.account_inspection_settings_button')}
+            </Button>
+          </div>
         </div>
         <div className={styles.inspectionOperationGrid}>
           <div className={styles.operationMainColumn}>

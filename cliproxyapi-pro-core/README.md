@@ -26,13 +26,22 @@ By default it stores SQLite data at:
 /CLIProxyAPI/usage/usage.sqlite
 ```
 
-The image declares `/CLIProxyAPI/usage` as a Docker volume so usage data and account-inspection schedule state can survive container replacement.
+The image declares `/CLIProxyAPI/usage` as a Docker volume so usage data, quota cache, model prices, and account-inspection schedule state can survive container replacement.
+
+At service startup the patch layer forces the upstream config values required by Pro:
+
+- `usage-statistics-enabled: true`
+- `remote-management.panel-github-repository: https://github.com/ssfun/CLIProxyAPI-Pro`
+
+The loaded in-memory config is always corrected. `config.yaml` is updated only when the loaded values differ, preserving normal startup behavior when the file is already correct.
 
 ### Usage API
 
 The embedded service exposes these management routes:
 
 - `GET /v0/management/usage` — aggregated usage payload for the management UI.
+- `GET /v0/management/usage/events` — incremental usage events after a cursor.
+- `GET /v0/management/usage/stream` — SSE stream for live usage updates.
 - `GET /v0/management/usage/export` — JSONL/NDJSON export.
 - `POST /v0/management/usage/import` — JSONL/NDJSON import.
 - `GET /v0/management/usage/status` — service status and record counts.
@@ -49,9 +58,10 @@ The embedded service exposes these management routes:
 The export contains usage events and may also include metadata records:
 
 - `model_prices` — persisted model price settings used by the management UI cost view.
+- `quota_cache` — SQLite-backed quota snapshots used by quota cards and account-scoped refresh.
 - `account_inspection_schedule` — persisted backend account-inspection schedule.
 
-`/usage/import` accepts the same JSONL format. It imports usage events, restores model prices, and restores the account-inspection schedule when that metadata record is present. Older event-only JSONL files remain compatible.
+`/usage/import` accepts the same JSONL format. It reads each line's `record_type` once, imports usage events, restores model prices, restores quota cache entries, and restores the account-inspection schedule when those metadata records are present. Older event-only JSONL files remain compatible.
 
 Example import response fields:
 
@@ -63,6 +73,8 @@ Example import response fields:
   "failed": 0,
   "modelPrices": 12,
   "modelPriceRecords": 1,
+  "quotaCache": 8,
+  "quotaCacheRecords": 1,
   "accountInspectionSchedule": true,
   "accountInspectionScheduleRecords": 1
 }

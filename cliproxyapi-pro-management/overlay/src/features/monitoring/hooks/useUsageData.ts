@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, type Dispatch, type SetStateAction } from 'react';
 import { apiClient } from '@/services/api/client';
 import { useAuthStore } from '@/stores/useAuthStore';
 import { computeApiUrl } from '@/utils/connection';
+import { isRecordValue } from '@/utils/quota';
 import {
   loadLegacyModelPrices,
   loadModelPricesFromSqlite,
@@ -35,7 +36,7 @@ type UsageModelEntry = { details?: unknown[]; [key: string]: unknown };
 type UsageApiEntry = { models?: Record<string, UsageModelEntry>; [key: string]: unknown };
 
 const asUsageApiEntry = (value: unknown): UsageApiEntry =>
-  value && typeof value === 'object' && !Array.isArray(value) ? (value as UsageApiEntry) : {};
+  isRecordValue(value) ? (value as UsageApiEntry) : {};
 
 const mergeUsagePayload = (current: UsagePayload | null, next: UsagePayload | null): UsagePayload | null => {
   if (!next) return current;
@@ -110,6 +111,135 @@ const parseUsageSsePayload = (block: string): UsagePayload | null => {
 
 const nextUsageReconnectDelay = (currentDelay: number) => Math.min(currentDelay * 2, 30000);
 
+type MutableRef<T> = { current: T };
+
+type UsageStateWriter = {
+  setUsage: Dispatch<SetStateAction<UsagePayload | null>>;
+  setLoading: (loading: boolean) => void;
+  setError: (error: string) => void;
+  setLastRefreshedAt: (date: Date | null) => void;
+};
+
+const loadUsageSnapshot = async ({
+  requestIdRef,
+  latestIdRef,
+  setUsage,
+  setLoading,
+  setError,
+  setLastRefreshedAt,
+}: UsageStateWriter & {
+  requestIdRef: MutableRef<number>;
+  latestIdRef: MutableRef<number>;
+}) => {
+  const requestId = requestIdRef.current + 1;
+  requestIdRef.current = requestId;
+  setLoading(true);
+  setError('');
+
+  try {
+    const payload = await apiClient.get<UsagePayload>('/usage');
+    if (requestIdRef.current !== requestId) return;
+    latestIdRef.current = toNumber(payload?.latest_id);
+    setUsage(payload ?? null);
+    setLastRefreshedAt(new Date());
+  } catch (err) {
+    if (requestIdRef.current !== requestId) return;
+    setError(err instanceof Error ? err.message : String(err));
+  } finally {
+    if (requestIdRef.current === requestId) {
+      setLoading(false);
+    }
+  }
+};
+
+const loadUsageIncrementalSnapshot = async ({
+  latestIdRef,
+  incrementalLoadingRef,
+  incrementalPendingRef,
+  loadUsage,
+  applyUsagePayload,
+}: {
+  latestIdRef: MutableRef<number>;
+  incrementalLoadingRef: MutableRef<boolean>;
+  incrementalPendingRef: MutableRef<boolean>;
+  loadUsage: () => Promise<void>;
+  applyUsagePayload: (payload: UsagePayload | null) => void;
+}) => {
+  if (incrementalLoadingRef.current) {
+    incrementalPendingRef.current = true;
+    return;
+  }
+
+  incrementalLoadingRef.current = true;
+  try {
+    do {
+      incrementalPendingRef.current = false;
+      const afterId = latestIdRef.current;
+      if (afterId <= 0) {
+        await loadUsage();
+        continue;
+      }
+
+      try {
+        const payload = await apiClient.get<UsagePayload>(`/usage/events?after_id=${afterId}&limit=5000`);
+        applyUsagePayload(payload ?? null);
+      } catch {
+        await loadUsage();
+      }
+    } while (incrementalPendingRef.current);
+  } finally {
+    incrementalLoadingRef.current = false;
+  }
+};
+
+const connectUsageStream = async ({
+  apiBase,
+  managementKey,
+  signal,
+  latestIdRef,
+  applyUsagePayload,
+  loadUsageIncremental,
+}: {
+  apiBase: string;
+  managementKey: string;
+  signal: AbortSignal;
+  latestIdRef: MutableRef<number>;
+  applyUsagePayload: (payload: UsagePayload | null) => void;
+  loadUsageIncremental: () => Promise<void>;
+}) => {
+  const decoder = new TextDecoder();
+  let buffer = '';
+  const url = buildUsageStreamUrl(apiBase, latestIdRef.current);
+  if (!url) return;
+
+  const response = await fetch(url, {
+    headers: { Authorization: `Bearer ${managementKey}` },
+    signal,
+  });
+  if (!response.ok || !response.body) {
+    throw new Error(`Usage stream failed: ${response.status}`);
+  }
+
+  const reader = response.body.getReader();
+  while (!signal.aborted) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const parts = buffer.split('\n\n');
+    buffer = parts.pop() ?? '';
+    parts.forEach((part) => {
+      try {
+        const payload = parseUsageSsePayload(part);
+        if (payload) {
+          applyUsagePayload(payload);
+        }
+      } catch {
+        void loadUsageIncremental();
+      }
+    });
+  }
+};
+
 export function useUsageData(): UseUsageDataReturn {
   const [usage, setUsage] = useState<UsagePayload | null>(null);
   const [loading, setLoading] = useState(true);
@@ -124,27 +254,14 @@ export function useUsageData(): UseUsageDataReturn {
   const incrementalLoadingRef = useRef(false);
   const incrementalPendingRef = useRef(false);
 
-  const loadUsage = useCallback(async () => {
-    const requestId = requestIdRef.current + 1;
-    requestIdRef.current = requestId;
-    setLoading(true);
-    setError('');
-
-    try {
-      const payload = await apiClient.get<UsagePayload>('/usage');
-      if (requestIdRef.current !== requestId) return;
-      latestIdRef.current = toNumber(payload?.latest_id);
-      setUsage(payload ?? null);
-      setLastRefreshedAt(new Date());
-    } catch (err) {
-      if (requestIdRef.current !== requestId) return;
-      setError(err instanceof Error ? err.message : String(err));
-    } finally {
-      if (requestIdRef.current === requestId) {
-        setLoading(false);
-      }
-    }
-  }, []);
+  const loadUsage = useCallback(() => loadUsageSnapshot({
+    requestIdRef,
+    latestIdRef,
+    setUsage,
+    setLoading,
+    setError,
+    setLastRefreshedAt,
+  }), []);
 
   const applyUsagePayload = useCallback((payload: UsagePayload | null) => {
     const nextLatestId = toNumber(payload?.latest_id);
@@ -154,33 +271,13 @@ export function useUsageData(): UseUsageDataReturn {
     setLastRefreshedAt(new Date());
   }, []);
 
-  const loadUsageIncremental = useCallback(async () => {
-    if (incrementalLoadingRef.current) {
-      incrementalPendingRef.current = true;
-      return;
-    }
-
-    incrementalLoadingRef.current = true;
-    try {
-      do {
-        incrementalPendingRef.current = false;
-        const afterId = latestIdRef.current;
-        if (afterId <= 0) {
-          await loadUsage();
-          continue;
-        }
-
-        try {
-          const payload = await apiClient.get<UsagePayload>(`/usage/events?after_id=${afterId}&limit=5000`);
-          applyUsagePayload(payload ?? null);
-        } catch {
-          await loadUsage();
-        }
-      } while (incrementalPendingRef.current);
-    } finally {
-      incrementalLoadingRef.current = false;
-    }
-  }, [applyUsagePayload, loadUsage]);
+  const loadUsageIncremental = useCallback(() => loadUsageIncrementalSnapshot({
+    latestIdRef,
+    incrementalLoadingRef,
+    incrementalPendingRef,
+    loadUsage,
+    applyUsagePayload,
+  }), [applyUsagePayload, loadUsage]);
 
   useEffect(() => {
     let cancelled = false;
@@ -219,39 +316,16 @@ export function useUsageData(): UseUsageDataReturn {
     let timeoutId: ReturnType<typeof setTimeout> | null = null;
 
     const connect = async () => {
-      const decoder = new TextDecoder();
-      let buffer = '';
-
       try {
-        const url = buildUsageStreamUrl(apiBase, latestIdRef.current);
-        if (!url) return;
-        const response = await fetch(url, {
-          headers: { Authorization: `Bearer ${managementKey}` },
+        await connectUsageStream({
+          apiBase,
+          managementKey,
           signal: controller.signal,
+          latestIdRef,
+          applyUsagePayload,
+          loadUsageIncremental,
         });
-        if (!response.ok || !response.body) {
-          throw new Error(`Usage stream failed: ${response.status}`);
-        }
-
         reconnectDelay = 1000;
-        const reader = response.body.getReader();
-        while (!controller.signal.aborted) {
-          const { value, done } = await reader.read();
-          if (done) break;
-          buffer += decoder.decode(value, { stream: true });
-          const parts = buffer.split('\n\n');
-          buffer = parts.pop() ?? '';
-          parts.forEach((part) => {
-            try {
-              const payload = parseUsageSsePayload(part);
-              if (payload) {
-                applyUsagePayload(payload);
-              }
-            } catch {
-              void loadUsageIncremental();
-            }
-          });
-        }
       } catch (err) {
         if (!controller.signal.aborted) {
           console.warn('Usage SSE stream disconnected:', err);

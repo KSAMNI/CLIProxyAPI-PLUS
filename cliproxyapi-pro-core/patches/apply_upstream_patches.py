@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import os
 import re
+import shutil
 from pathlib import Path
 
 ROOT = Path(os.environ.get('SRC_ROOT', '/src/CLIProxyAPI'))
@@ -192,15 +193,92 @@ if not scheduler_source.is_file():
 management_scheduler.write_text(re.sub(r'github\.com/router-for-me/CLIProxyAPI/v\d+', MODULE_PATH, scheduler_source.read_text()))
 replace_once(
     auth_files,
-    '''\t\t\"unavailable\":    auth.Unavailable,\n\t\t\"runtime_only\":   runtimeOnly,\n''',
-    '''\t\t\"unavailable\":    auth.Unavailable,\n\t\t\"last_error\":     auth.LastError,\n\t\t\"runtime_only\":   runtimeOnly,\n''',
+    '''		"unavailable":    auth.Unavailable,
+		"runtime_only":   runtimeOnly,
+''',
+    '''		"unavailable":    auth.Unavailable,
+		"last_error":     authFileLastError(auth),
+		"runtime_only":   runtimeOnly,
+''',
+)
+insert_before(
+    auth_files,
+    'func authAttribute(auth *coreauth.Auth, key string) string {\n',
+    '''func authFileLastError(auth *coreauth.Auth) *coreauth.Error {
+	if auth == nil {
+		return nil
+	}
+	if auth.LastError != nil {
+		return auth.LastError
+	}
+	if auth.Metadata == nil {
+		return nil
+	}
+	raw, ok := auth.Metadata["last_error"].(map[string]any)
+	if !ok {
+		return nil
+	}
+	lastError := &coreauth.Error{
+		Code:       metadataString(raw["code"]),
+		Message:    metadataString(raw["message"]),
+		Retryable:  metadataBool(raw["retryable"]),
+		HTTPStatus: metadataInt(raw["http_status"]),
+	}
+	if lastError.Code == "" && lastError.Message == "" && lastError.HTTPStatus == 0 {
+		return nil
+	}
+	return lastError
+}
+
+func metadataString(value any) string {
+	if value == nil {
+		return ""
+	}
+	return strings.TrimSpace(fmt.Sprint(value))
+}
+
+func metadataBool(value any) bool {
+	switch typed := value.(type) {
+	case bool:
+		return typed
+	case string:
+		return strings.EqualFold(strings.TrimSpace(typed), "true")
+	default:
+		return false
+	}
+}
+
+func metadataInt(value any) int {
+	switch typed := value.(type) {
+	case int:
+		return typed
+	case int64:
+		return int(typed)
+	case float64:
+		return int(typed)
+	case json.Number:
+		parsed, _ := typed.Int64()
+		return int(parsed)
+	case string:
+		parsed, _ := strconv.Atoi(strings.TrimSpace(typed))
+		return parsed
+	default:
+		return 0
+	}
+}
+
+''',
+    'func authFileLastError',
 )
 
-rewrite_module_imports(ROOT / 'internal/embeddedusage/server.go')
-rewrite_module_imports(ROOT / 'internal/embeddedusage/service.go')
-rewrite_module_imports(ROOT / 'internal/embeddedusage/store.go')
-
 patch_dir = Path(__file__).resolve().parent
+embeddedusage_source = patch_dir.parent / 'embeddedusage'
+embeddedusage_target = ROOT / 'internal/embeddedusage'
+shutil.copytree(embeddedusage_source, embeddedusage_target, dirs_exist_ok=True)
+rewrite_module_imports(embeddedusage_target / 'server.go')
+rewrite_module_imports(embeddedusage_target / 'service.go')
+rewrite_module_imports(embeddedusage_target / 'store.go')
+
 redisqueue_plugin = ROOT / 'internal/redisqueue/plugin.go'
 redisqueue_usage_toggle = ROOT / 'internal/redisqueue/usage_toggle.go'
 redisqueue_plugin.write_text(re.sub(r'github\.com/router-for-me/CLIProxyAPI/v\d+', MODULE_PATH, (patch_dir / 'redisqueue_plugin.go').read_text()))
@@ -291,7 +369,7 @@ add_go_import(run, '"' + import_path('internal/config') + '"\n', '\t"' + import_
 insert_before(
     run,
     '// StartService builds and runs the proxy service using the exported SDK.\n',
-    'func applyProRequiredStartupConfig(cfg *config.Config, configPath string) {\n\tif cfg == nil {\n\t\treturn\n\t}\n\tcfg.UsageStatisticsEnabled = true\n\tcfg.RemoteManagement.PanelGitHubRepository = config.DefaultPanelGitHubRepository\n\tif configPath == "" {\n\t\treturn\n\t}\n\tif err := config.SaveConfigPreserveCommentsUpdateNestedBoolScalar(configPath, []string{"usage-statistics-enabled"}, true); err != nil {\n\t\tlog.Warnf("failed to persist usage statistics config: %v", err)\n\t}\n\tif err := config.SaveConfigPreserveCommentsUpdateNestedScalar(configPath, []string{"remote-management", "panel-github-repository"}, config.DefaultPanelGitHubRepository); err != nil {\n\t\tlog.Warnf("failed to persist panel repository config: %v", err)\n\t}\n}\n\n',
+    'func applyProRequiredStartupConfig(cfg *config.Config, configPath string) {\n\tif cfg == nil {\n\t\treturn\n\t}\n\tshouldPersistUsageStatistics := !cfg.UsageStatisticsEnabled\n\tshouldPersistPanelRepository := cfg.RemoteManagement.PanelGitHubRepository != config.DefaultPanelGitHubRepository\n\tcfg.UsageStatisticsEnabled = true\n\tcfg.RemoteManagement.PanelGitHubRepository = config.DefaultPanelGitHubRepository\n\tif configPath == "" {\n\t\treturn\n\t}\n\tif shouldPersistUsageStatistics {\n\t\tif err := config.SaveConfigPreserveCommentsUpdateNestedBoolScalar(configPath, []string{"usage-statistics-enabled"}, true); err != nil {\n\t\t\tlog.Warnf("failed to persist usage statistics config: %v", err)\n\t\t}\n\t}\n\tif shouldPersistPanelRepository {\n\t\tif err := config.SaveConfigPreserveCommentsUpdateNestedScalar(configPath, []string{"remote-management", "panel-github-repository"}, config.DefaultPanelGitHubRepository); err != nil {\n\t\t\tlog.Warnf("failed to persist panel repository config: %v", err)\n\t\t}\n\t}\n}\n\n',
     'func applyProRequiredStartupConfig',
 )
 insert_before_nth(

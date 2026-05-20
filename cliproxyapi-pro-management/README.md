@@ -14,7 +14,7 @@ Adds a top-level monitoring route:
 /monitoring
 ```
 
-The page consumes the customized `cliproxyapi-pro-core` backend usage API and provides:
+The page consumes the customized `cliproxyapi-pro-core` backend usage API. It loads an initial usage snapshot, follows incremental event polling or the SSE usage stream, and provides:
 
 - request totals and success/failure metrics
 - success rate and latency summaries
@@ -40,7 +40,7 @@ Model price settings are persisted through the backend SQLite API instead of nor
 
 If the backend has no saved prices, the UI can migrate old `localStorage` price settings once. Normal reads and writes then use SQLite.
 
-Model prices are also included in usage JSONL export/import as a `model_prices` metadata record.
+Model prices are also included in usage JSONL export/import as a `model_prices` metadata record, so WebDAV usage backups can restore cost settings with usage events.
 
 ### SQLite-backed quota persistence
 
@@ -50,7 +50,7 @@ Quota snapshots are persisted through the backend usage service:
 - `PUT /usage/quota-cache`
 - `DELETE /usage/quota-cache`
 
-The UI starts `QuotaPersistenceBootstrap` from the main layout. It preloads saved quota snapshots into the Zustand quota store and syncs successful quota checks back to SQLite.
+The UI starts `QuotaPersistenceBootstrap` from the main layout. It preloads saved quota snapshots into the Zustand quota store and syncs successful quota checks back to SQLite. Quota cache entries are also included in usage JSONL export/import as a `quota_cache` metadata record.
 
 Supported quota providers:
 
@@ -203,12 +203,16 @@ v1.7.41-pro
 These frontend customizations expect the customized `cliproxyapi-pro-core` backend to expose usage and account-inspection routes under the management API prefix:
 
 - `/v0/management/usage`
+- `/v0/management/usage/status`
+- `/v0/management/usage/events`
+- `/v0/management/usage/stream`
 - `/v0/management/usage/export`
 - `/v0/management/usage/import`
 - `/v0/management/usage/quota-cache`
 - `/v0/management/usage/model-prices`
 - `/v0/management/account-inspection/schedule`
 - `/v0/management/account-inspection/status`
+- `/v0/management/account-inspection/logs`
 - `/v0/management/account-inspection/run`
 - `/v0/management/account-inspection/pause`
 - `/v0/management/account-inspection/resume`

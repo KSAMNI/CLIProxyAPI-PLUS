@@ -23,7 +23,7 @@ class QuotaPersistenceMiddleware {
   private isPreloading = false;
   private syncQueue = new Set<string>();
   private isFlushing = false;
-  private syncedVersions = new Map<string, number>();
+  private syncedVersions = new Map<string, string>();
   private loadedThrough = 0;
   private reloadRequestedAt = 0;
   private preloadPromise: Promise<void> | null = null;
@@ -75,6 +75,7 @@ class QuotaPersistenceMiddleware {
       this.unsubscribe = null;
     }
     this.lastQuotaMaps.clear();
+    this.syncedVersions.clear();
     void this.flushSyncQueue();
     console.log('QuotaPersistenceMiddleware: Stopped');
   }
@@ -107,17 +108,37 @@ class QuotaPersistenceMiddleware {
     quotaMap: Record<string, QuotaStatusState>
   ) {
     let changed = false;
+    const activeKeys = new Set<string>();
     Object.entries(quotaMap).forEach(([fileName, state]) => {
+      const key = `${provider}:${fileName}`;
+      activeKeys.add(key);
       if (state.status !== 'success') return;
 
-      const key = `${provider}:${fileName}`;
-      const version = state.cachedAt ?? 0;
+      const version = this.getSyncVersion(state);
       if (this.syncedVersions.get(key) === version) return;
       this.syncQueue.add(key);
       changed = true;
     });
 
+    this.pruneSyncedVersions(provider, activeKeys);
     if (changed) void this.flushSyncQueue();
+  }
+
+  private getSyncVersion(state: unknown) {
+    if (state && typeof state === 'object' && 'cachedAt' in state) {
+      const cachedAt = (state as QuotaStatusState).cachedAt;
+      if (cachedAt !== undefined) return String(cachedAt);
+    }
+    return JSON.stringify(state);
+  }
+
+  private pruneSyncedVersions(provider: QuotaProviderType, activeKeys: Set<string>) {
+    const prefix = `${provider}:`;
+    Array.from(this.syncedVersions.keys()).forEach((key) => {
+      if (key.startsWith(prefix) && !activeKeys.has(key)) {
+        this.syncedVersions.delete(key);
+      }
+    });
   }
 
   /**
@@ -144,10 +165,11 @@ class QuotaPersistenceMiddleware {
 
         if (quotaState?.status !== 'success') continue;
 
+        const version = this.getSyncVersion(quotaState);
         const cachedAt = quotaState.cachedAt ?? Date.now();
         const synced = await sqliteQuotaCache.set(provider, fileName, { ...quotaState, cachedAt }, cachedAt);
         if (synced) {
-          this.syncedVersions.set(key, cachedAt);
+          this.syncedVersions.set(key, version);
         }
       }
     } catch (err) {
@@ -241,7 +263,7 @@ class QuotaPersistenceMiddleware {
         let changed = false;
         const next = { ...prev };
         cached.forEach((entry, fileName) => {
-          this.syncedVersions.set(`${provider}:${fileName}`, entry.cachedAt ?? 0);
+          this.syncedVersions.set(`${provider}:${fileName}`, this.getSyncVersion(entry.data));
           if (next[fileName] === entry.data) return;
           next[fileName] = entry.data;
           changed = true;
@@ -276,6 +298,8 @@ class QuotaPersistenceMiddleware {
    */
   async clearCache() {
     await sqliteQuotaCache.clear();
+    this.syncedVersions.clear();
+    this.syncQueue.clear();
     console.log('QuotaPersistenceMiddleware: Cache cleared');
   }
 }

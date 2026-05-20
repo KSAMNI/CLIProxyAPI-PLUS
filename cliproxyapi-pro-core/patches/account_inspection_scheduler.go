@@ -2002,6 +2002,28 @@ func isInspectionAuthRecoveryStatus(status int) bool {
 	return (status >= 200 && status < 300) || status == 402 || status == 429
 }
 
+func syncAuthInspectionLastError(auth *coreauth.Auth, lastError *coreauth.Error) {
+	if auth == nil {
+		return
+	}
+	auth.LastError = lastError
+	if lastError == nil {
+		if auth.Metadata != nil {
+			delete(auth.Metadata, "last_error")
+		}
+		return
+	}
+	if auth.Metadata == nil {
+		auth.Metadata = make(map[string]any)
+	}
+	auth.Metadata["last_error"] = map[string]any{
+		"code":        lastError.Code,
+		"message":     lastError.Message,
+		"retryable":   lastError.Retryable,
+		"http_status": lastError.HTTPStatus,
+	}
+}
+
 func (s *accountInspectionScheduler) syncInspectionAuthError(ctx context.Context, account accountInspectionAccount, code string, message string, status int) {
 	if s == nil || s.h == nil || s.h.authManager == nil || account.AuthIndex == "" {
 		return
@@ -2011,13 +2033,10 @@ func (s *accountInspectionScheduler) syncInspectionAuthError(ctx context.Context
 		return
 	}
 	now := time.Now()
-	if auth.Status == coreauth.StatusError && auth.StatusMessage == message && auth.Unavailable && auth.LastError != nil && auth.LastError.Code == code && auth.LastError.HTTPStatus == status {
-		return
-	}
 	auth.Status = coreauth.StatusError
 	auth.StatusMessage = message
 	auth.Unavailable = true
-	auth.LastError = &coreauth.Error{Code: code, Message: message, HTTPStatus: status}
+	syncAuthInspectionLastError(auth, &coreauth.Error{Code: code, Message: message, HTTPStatus: status})
 	auth.UpdatedAt = now
 	if _, err := s.h.authManager.Update(ctx, auth); err != nil {
 		s.appendLog("warning", fmt.Sprintf("%s 认证状态回写失败：%s", account.identity(), err.Error()))
@@ -2042,7 +2061,7 @@ func (s *accountInspectionScheduler) clearInspectionAuthError(ctx context.Contex
 	}
 	auth.StatusMessage = ""
 	auth.Unavailable = false
-	auth.LastError = nil
+	syncAuthInspectionLastError(auth, nil)
 	auth.UpdatedAt = time.Now()
 	if _, err := s.h.authManager.Update(ctx, auth); err != nil {
 		s.appendLog("warning", fmt.Sprintf("%s 认证状态清理失败：%s", account.identity(), err.Error()))
@@ -2322,7 +2341,7 @@ func (s *accountInspectionScheduler) executeAction(ctx context.Context, result a
 			auth.Status = coreauth.StatusActive
 			auth.StatusMessage = ""
 			auth.Unavailable = false
-			auth.LastError = nil
+			syncAuthInspectionLastError(auth, nil)
 		}
 		auth.UpdatedAt = time.Now()
 		_, err := s.h.authManager.Update(ctx, auth)

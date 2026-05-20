@@ -20,6 +20,13 @@ interface QuotaCacheStatsResponse {
 }
 
 class SqliteQuotaCache {
+  private async fetchEntries<T = unknown>(provider?: string): Promise<QuotaCacheEntry<T>[]> {
+    const response = await apiClient.get<QuotaCacheListResponse<T>>('/usage/quota-cache', {
+      params: provider ? { provider } : undefined,
+    });
+    return response.items ?? [];
+  }
+
   async get<T>(provider: string, fileName: string): Promise<T | null> {
     try {
       const response = await apiClient.get<QuotaCacheListResponse<T>>('/usage/quota-cache', {
@@ -38,10 +45,8 @@ class SqliteQuotaCache {
 
     try {
       const expected = new Set(fileNames);
-      const response = await apiClient.get<QuotaCacheListResponse>('/usage/quota-cache', {
-        params: { provider },
-      });
-      (response.items ?? []).forEach((entry) => {
+      const entries = await this.fetchEntries(provider);
+      entries.forEach((entry) => {
         if (expected.has(entry.fileName)) {
           result.set(entry.fileName, entry.data);
         }
@@ -89,8 +94,7 @@ class SqliteQuotaCache {
 
   async getAll<T = unknown>(): Promise<QuotaCacheEntry<T>[]> {
     try {
-      const response = await apiClient.get<QuotaCacheListResponse<T>>('/usage/quota-cache');
-      return response.items ?? [];
+      return await this.fetchEntries<T>();
     } catch (err) {
       console.error('SQLite quota cache getAll error:', err);
       return [];
@@ -99,10 +103,8 @@ class SqliteQuotaCache {
 
   async getFileNamesByProvider(provider: string): Promise<string[]> {
     try {
-      const response = await apiClient.get<QuotaCacheListResponse>('/usage/quota-cache', {
-        params: { provider },
-      });
-      return (response.items ?? []).map((entry) => entry.fileName);
+      const entries = await this.fetchEntries(provider);
+      return entries.map((entry) => entry.fileName);
     } catch (err) {
       console.error('SQLite quota cache getFileNamesByProvider error:', err);
       return [];
@@ -112,14 +114,7 @@ class SqliteQuotaCache {
   async getStats(): Promise<{ totalEntries: number; updatedAt: number }> {
     try {
       const stats = await apiClient.get<QuotaCacheStatsResponse>('/usage/quota-cache', { params: { stats: '1' } });
-      if (typeof stats.totalEntries === 'number') {
-        return { totalEntries: stats.totalEntries, updatedAt: stats.updatedAt ?? 0 };
-      }
-      const items = await this.getAll();
-      return {
-        totalEntries: items.length,
-        updatedAt: items.reduce((latest, entry) => Math.max(latest, entry.cachedAt, entry.accessedAt), stats.updatedAt ?? 0),
-      };
+      return { totalEntries: stats.totalEntries ?? 0, updatedAt: stats.updatedAt ?? 0 };
     } catch (err) {
       console.error('SQLite quota cache getStats error:', err);
       return { totalEntries: 0, updatedAt: 0 };

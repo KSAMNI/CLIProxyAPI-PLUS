@@ -14,7 +14,7 @@
 /monitoring
 ```
 
-该页面消费 customized `cliproxyapi-pro-core` 后端 usage API，提供：
+该页面消费 customized `cliproxyapi-pro-core` 后端 usage API。页面会加载初始 usage 快照，并通过增量事件轮询或 SSE usage 流跟进更新，提供：
 
 - 请求总量和成功/失败统计
 - 成功率和延迟摘要
@@ -40,7 +40,7 @@
 
 如果后端还没有保存价格，页面可从旧 `localStorage` 价格设置做一次性迁移。之后正常读写都走 SQLite。
 
-模型价格也会作为 `model_prices` 元数据记录参与 usage JSONL 导入导出。
+模型价格也会作为 `model_prices` 元数据记录参与 usage JSONL 导入导出，因此 WebDAV usage 备份可随 usage events 一起恢复成本设置。
 
 ### SQLite 配额持久化
 
@@ -50,7 +50,7 @@
 - `PUT /usage/quota-cache`
 - `DELETE /usage/quota-cache`
 
-UI 会在主布局中启动 `QuotaPersistenceBootstrap`，把已保存的配额快照预加载到 Zustand quota store，并把成功的配额检查同步回 SQLite。
+UI 会在主布局中启动 `QuotaPersistenceBootstrap`，把已保存的配额快照预加载到 Zustand quota store，并把成功的配额检查同步回 SQLite。Quota cache entries 也会作为 `quota_cache` 元数据记录参与 usage JSONL 导入导出。
 
 支持的配额 provider：
 
@@ -203,12 +203,16 @@ v1.7.41-pro
 这些前端定制依赖 customized `cliproxyapi-pro-core` 后端在 management API 前缀下暴露 usage 和账号巡检接口：
 
 - `/v0/management/usage`
+- `/v0/management/usage/status`
+- `/v0/management/usage/events`
+- `/v0/management/usage/stream`
 - `/v0/management/usage/export`
 - `/v0/management/usage/import`
 - `/v0/management/usage/quota-cache`
 - `/v0/management/usage/model-prices`
 - `/v0/management/account-inspection/schedule`
 - `/v0/management/account-inspection/status`
+- `/v0/management/account-inspection/logs`
 - `/v0/management/account-inspection/run`
 - `/v0/management/account-inspection/pause`
 - `/v0/management/account-inspection/resume`

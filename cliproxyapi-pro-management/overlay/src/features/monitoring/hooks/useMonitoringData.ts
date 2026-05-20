@@ -658,39 +658,59 @@ const buildRecentPattern = (rows: MonitoringEventRow[], limit = 10) =>
 
 export const buildMonitoringSummary = (rows: MonitoringEventRow[]): MonitoringSummary => {
   const totalCalls = rows.length;
-  const failureCalls = rows.filter((row) => row.failed).length;
-  const successCalls = Math.max(totalCalls - failureCalls, 0);
-  const inputTokens = rows.reduce((sum, row) => sum + row.inputTokens, 0);
-  const outputTokens = rows.reduce((sum, row) => sum + row.outputTokens, 0);
-  const reasoningTokens = rows.reduce((sum, row) => sum + row.reasoningTokens, 0);
-  const cachedTokens = rows.reduce((sum, row) => sum + row.cachedTokens, 0);
-  const totalTokens = rows.reduce((sum, row) => sum + row.totalTokens, 0);
-  const totalCost = rows.reduce((sum, row) => sum + row.totalCost, 0);
-
+  let failureCalls = 0;
+  let inputTokens = 0;
+  let outputTokens = 0;
+  let reasoningTokens = 0;
+  let cachedTokens = 0;
+  let totalTokens = 0;
+  let totalCost = 0;
   let latencySum = 0;
   let latencyCount = 0;
-  rows.forEach((row) => {
-    if (row.latencyMs === null) return;
-    latencySum += row.latencyMs;
-    latencyCount += 1;
-  });
-
+  let recentCalls = 0;
+  let recentTokens = 0;
+  let zeroTokenCalls = 0;
   const taskMap = new Map<string, boolean>();
-  rows.forEach((row) => {
-    const existing = taskMap.get(row.taskKey) ?? false;
-    taskMap.set(row.taskKey, existing || row.failed);
-  });
-
-  const approxTasks = taskMap.size;
-  const approxTaskFailures = Array.from(taskMap.values()).filter(Boolean).length;
-  const zeroTokenRows = rows.filter((row) => row.totalTokens === 0);
-
-  const activeDays = new Set(rows.map((row) => row.dayKey));
-  const activeDayCount = Math.max(activeDays.size, 1);
+  const activeDays = new Set<string>();
+  const zeroTokenModels = new Set<string>();
   const nowMs = Date.now();
   const windowStart = nowMs - 30 * 60 * 1000;
-  const recentRows = rows.filter((row) => row.timestampMs >= windowStart && row.timestampMs <= nowMs);
-  const recentTokens = recentRows.reduce((sum, row) => sum + row.totalTokens, 0);
+
+  rows.forEach((row) => {
+    if (row.failed) failureCalls += 1;
+    inputTokens += row.inputTokens;
+    outputTokens += row.outputTokens;
+    reasoningTokens += row.reasoningTokens;
+    cachedTokens += row.cachedTokens;
+    totalTokens += row.totalTokens;
+    totalCost += row.totalCost;
+    activeDays.add(row.dayKey);
+
+    if (row.latencyMs !== null) {
+      latencySum += row.latencyMs;
+      latencyCount += 1;
+    }
+
+    taskMap.set(row.taskKey, (taskMap.get(row.taskKey) ?? false) || row.failed);
+
+    if (row.totalTokens === 0) {
+      zeroTokenCalls += 1;
+      zeroTokenModels.add(row.model);
+    }
+
+    if (row.timestampMs >= windowStart && row.timestampMs <= nowMs) {
+      recentCalls += 1;
+      recentTokens += row.totalTokens;
+    }
+  });
+
+  const successCalls = Math.max(totalCalls - failureCalls, 0);
+  const approxTasks = taskMap.size;
+  let approxTaskFailures = 0;
+  taskMap.forEach((failed) => {
+    if (failed) approxTaskFailures += 1;
+  });
+  const activeDayCount = Math.max(activeDays.size, 1);
 
   return {
     totalCalls,
@@ -704,7 +724,7 @@ export const buildMonitoringSummary = (rows: MonitoringEventRow[]): MonitoringSu
     totalTokens,
     totalCost,
     averageLatencyMs: latencyCount > 0 ? latencySum / latencyCount : null,
-    rpm30m: recentRows.length / 30,
+    rpm30m: recentCalls / 30,
     tpm30m: recentTokens / 30,
     avgDailyRequests: totalCalls / activeDayCount,
     avgDailyTokens: totalTokens / activeDayCount,
@@ -712,8 +732,8 @@ export const buildMonitoringSummary = (rows: MonitoringEventRow[]): MonitoringSu
     approxTaskFailures,
     approxTaskSuccessRate:
       approxTasks > 0 ? Math.max(approxTasks - approxTaskFailures, 0) / approxTasks : 1,
-    zeroTokenCalls: zeroTokenRows.length,
-    zeroTokenModels: Array.from(new Set(zeroTokenRows.map((row) => row.model))).sort(),
+    zeroTokenCalls,
+    zeroTokenModels: Array.from(zeroTokenModels).sort(),
   };
 };
 
@@ -912,6 +932,15 @@ export const buildAccountRows = ({
         right.totalCost - left.totalCost
     );
 };
+
+export const buildAccountRowsByAccount = (rows: MonitoringEventRow[], includeRows = false) =>
+  buildAccountRows({ rows, groupBy: 'account', includeRows });
+
+export const buildAccountRowsByApiKey = (rows: MonitoringEventRow[]) =>
+  buildAccountRows({ rows, groupBy: 'apiKey' });
+
+export const buildAccountRowsByModel = (rows: MonitoringEventRow[]) =>
+  buildAccountRows({ rows, groupBy: 'model' });
 
 export const buildRealtimeMonitorRows = (rows: MonitoringEventRow[]): MonitoringRealtimeRow[] => {
   const grouped = new Map<

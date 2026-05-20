@@ -14,7 +14,9 @@ import {
   IconSlidersHorizontal,
 } from '@/components/ui/icons';
 import {
-  buildAccountRows,
+  buildAccountRowsByAccount,
+  buildAccountRowsByApiKey,
+  buildAccountRowsByModel,
   buildDayLabel,
   buildHourLabel,
   buildLocalDayKey,
@@ -2579,8 +2581,8 @@ export function MonitoringCenterPage() {
   const topSummary = useMemo(() => buildMonitoringSummary(topStatsRows), [topStatsRows]);
   const todaySummary = useMemo(() => buildMonitoringSummary(todayStatsRows), [todayStatsRows]);
   const rankingData = useMemo(() => {
-    const modelRows = buildAccountRows({ rows: usageTrendScopedRows, groupBy: 'model' });
-    const apiKeyRows = buildAccountRows({ rows: trendStatsRows, groupBy: 'apiKey' });
+    const modelRows = buildAccountRowsByModel(usageTrendScopedRows);
+    const apiKeyRows = buildAccountRowsByApiKey(trendStatsRows);
     const totals = {
       scoped: {
         requests: 0,
@@ -2630,7 +2632,7 @@ export function MonitoringCenterPage() {
   const apiKeyRankingMetricTotal = rankingData.totals.trend[apiKeyRankingMetric];
   const accountStatsFilteredRows = trendStatsRows;
   const accountStatsRows = useMemo(
-    () => [...buildAccountRows({ rows: accountStatsFilteredRows, groupBy: 'account', includeRows: true })]
+    () => [...buildAccountRowsByAccount(accountStatsFilteredRows, true)]
       .sort((left, right) => (
         getAccountSortValue(right, accountStatsMetric) - getAccountSortValue(left, accountStatsMetric)
         || right.lastSeenAt - left.lastSeenAt

@@ -26,13 +26,22 @@ internal/embeddedusage
 /CLIProxyAPI/usage/usage.sqlite
 ```
 
-镜像声明 `/CLIProxyAPI/usage` 为 Docker volume，用于在容器替换后保留 usage 数据和账号巡检调度状态。
+镜像声明 `/CLIProxyAPI/usage` 为 Docker volume，用于在容器替换后保留 usage 数据、quota cache、模型价格和账号巡检调度状态。
+
+服务启动时，补丁层会强制 Pro 依赖的 upstream 配置值：
+
+- `usage-statistics-enabled: true`
+- `remote-management.panel-github-repository: https://github.com/ssfun/CLIProxyAPI-Pro`
+
+加载后的内存配置始终会被修正。只有当加载到的值不一致时才会更新 `config.yaml`，文件已经正确时不会重复落盘。
 
 ### Usage API
 
 内嵌服务提供这些 management routes：
 
 - `GET /v0/management/usage` — 管理页面使用的聚合 usage 数据。
+- `GET /v0/management/usage/events` — cursor 之后的增量 usage events。
+- `GET /v0/management/usage/stream` — usage 实时更新 SSE 流。
 - `GET /v0/management/usage/export` — JSONL/NDJSON 导出。
 - `POST /v0/management/usage/import` — JSONL/NDJSON 导入。
 - `GET /v0/management/usage/status` — 服务状态和记录数量。
@@ -49,9 +58,10 @@ internal/embeddedusage
 导出内容包含 usage events，也可能包含元数据记录：
 
 - `model_prices` — 管理页面成本视图使用的模型价格设置。
+- `quota_cache` — 配额卡片和账号级刷新使用的 SQLite-backed quota snapshots。
 - `account_inspection_schedule` — 后端账号巡检调度设置。
 
-`/usage/import` 接受同样的 JSONL 格式。导入时会导入 usage events，恢复模型价格，并在存在账号巡检调度记录时恢复调度设置。旧的 event-only JSONL 文件仍兼容。
+`/usage/import` 接受同样的 JSONL 格式。导入时会对每行只读取一次 `record_type`，导入 usage events，恢复模型价格、quota cache entries，并在存在账号巡检调度记录时恢复调度设置。旧的 event-only JSONL 文件仍兼容。
 
 导入响应示例字段：
 
@@ -63,6 +73,8 @@ internal/embeddedusage
   "failed": 0,
   "modelPrices": 12,
   "modelPriceRecords": 1,
+  "quotaCache": 8,
+  "quotaCacheRecords": 1,
   "accountInspectionSchedule": true,
   "accountInspectionScheduleRecords": 1
 }

@@ -250,31 +250,42 @@ func (s *Server) handleUsageImport(c *gin.Context) {
 		if line == "" {
 			continue
 		}
-		if schedule, ok, err := parseAccountInspectionScheduleImportRecord([]byte(line)); err != nil {
+		raw := []byte(line)
+		recordType, err := readImportRecordType(raw)
+		if err != nil {
 			failed++
 			continue
-		} else if ok {
+		}
+		switch recordType {
+		case accountInspectionScheduleExportRecordType:
+			schedule, err := parseAccountInspectionScheduleImportRecord(raw)
+			if err != nil {
+				failed++
+				continue
+			}
 			accountInspectionSchedule = schedule
 			accountInspectionScheduleRecords++
 			continue
-		}
-		if prices, ok, err := parseModelPricesImportRecord([]byte(line)); err != nil {
-			failed++
-			continue
-		} else if ok {
+		case modelPricesExportRecordType:
+			prices, err := parseModelPricesImportRecord(raw)
+			if err != nil {
+				failed++
+				continue
+			}
 			modelPrices = prices
 			modelPriceRecords++
 			continue
-		}
-		if entries, ok, err := parseQuotaCacheImportRecord([]byte(line)); err != nil {
-			failed++
-			continue
-		} else if ok {
+		case quotaCacheExportRecordType:
+			entries, err := parseQuotaCacheImportRecord(raw)
+			if err != nil {
+				failed++
+				continue
+			}
 			quotaEntries = append(quotaEntries, entries...)
 			quotaCacheRecords++
 			continue
 		}
-		event, err := internalusage.NormalizeRaw([]byte(line))
+		event, err := internalusage.NormalizeRaw(raw)
 		if err != nil {
 			failed++
 			continue
@@ -324,53 +335,44 @@ func (s *Server) handleUsageImport(c *gin.Context) {
 	})
 }
 
-func parseTypedImportRecord[T any](raw []byte, recordType string) (T, bool, error) {
-	var zero T
+func readImportRecordType(raw []byte) (string, error) {
 	var header struct {
 		RecordType string `json:"record_type"`
 	}
 	if err := json.Unmarshal(raw, &header); err != nil {
-		return zero, false, err
+		return "", err
 	}
-	if header.RecordType != recordType {
-		return zero, false, nil
-	}
-
-	var record T
-	if err := json.Unmarshal(raw, &record); err != nil {
-		return zero, true, err
-	}
-	return record, true, nil
+	return header.RecordType, nil
 }
 
-func parseAccountInspectionScheduleImportRecord(raw []byte) (json.RawMessage, bool, error) {
-	record, ok, err := parseTypedImportRecord[accountInspectionScheduleExportRecord](raw, accountInspectionScheduleExportRecordType)
-	if err != nil || !ok {
-		return nil, ok, err
+func parseAccountInspectionScheduleImportRecord(raw []byte) (json.RawMessage, error) {
+	var record accountInspectionScheduleExportRecord
+	if err := json.Unmarshal(raw, &record); err != nil {
+		return nil, err
 	}
 	if len(record.Schedule) == 0 {
-		return nil, true, nil
+		return nil, nil
 	}
-	return record.Schedule, true, nil
+	return record.Schedule, nil
 }
 
-func parseQuotaCacheImportRecord(raw []byte) ([]QuotaCacheEntry, bool, error) {
-	record, ok, err := parseTypedImportRecord[quotaCacheExportRecord](raw, quotaCacheExportRecordType)
-	if err != nil || !ok {
-		return nil, ok, err
+func parseQuotaCacheImportRecord(raw []byte) ([]QuotaCacheEntry, error) {
+	var record quotaCacheExportRecord
+	if err := json.Unmarshal(raw, &record); err != nil {
+		return nil, err
 	}
-	return record.Entries, true, nil
+	return record.Entries, nil
 }
 
-func parseModelPricesImportRecord(raw []byte) (map[string]ModelPrice, bool, error) {
-	record, ok, err := parseTypedImportRecord[modelPricesExportRecord](raw, modelPricesExportRecordType)
-	if err != nil || !ok {
-		return nil, ok, err
+func parseModelPricesImportRecord(raw []byte) (map[string]ModelPrice, error) {
+	var record modelPricesExportRecord
+	if err := json.Unmarshal(raw, &record); err != nil {
+		return nil, err
 	}
 	if record.Prices == nil {
 		record.Prices = map[string]ModelPrice{}
 	}
-	return record.Prices, true, nil
+	return record.Prices, nil
 }
 
 func (s *Server) handleStatus(c *gin.Context) {
