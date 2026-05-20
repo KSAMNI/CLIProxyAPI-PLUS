@@ -1,9 +1,9 @@
-name: Publish CLIProxyAPI Pro Mangement
+name: Publish CLIProxyAPI Pro Management
 
 on:
   workflow_dispatch:
   schedule:
-    - cron: '0 20 * * *'
+    - cron: '0 */12 * * *'
 
 jobs:
   check-version:
