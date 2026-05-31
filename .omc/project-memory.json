@@ -1,0 +1,373 @@
+{
+  "version": "1.0.0",
+  "lastScanned": 1780244446738,
+  "projectRoot": "I:\\Code\\PythonCode\\CLIProxyAPI-Pro",
+  "techStack": {
+    "languages": [],
+    "frameworks": [],
+    "packageManager": null,
+    "runtime": null
+  },
+  "build": {
+    "buildCommand": null,
+    "testCommand": null,
+    "lintCommand": null,
+    "devCommand": null,
+    "scripts": {}
+  },
+  "conventions": {
+    "namingStyle": null,
+    "importStyle": null,
+    "testPattern": null,
+    "fileOrganization": null
+  },
+  "structure": {
+    "isMonorepo": false,
+    "workspaces": [],
+    "mainDirectories": [
+      "assets"
+    ],
+    "gitBranches": {
+      "defaultBranch": "main",
+      "branchingStrategy": null
+    }
+  },
+  "customNotes": [],
+  "directoryMap": {
+    "assets": {
+      "path": "assets",
+      "purpose": "Static assets",
+      "fileCount": 5,
+      "lastAccessed": 1780244446721,
+      "keyFiles": [
+        "01.png",
+        "02.png",
+        "03.png",
+        "04.png",
+        "05.png"
+      ]
+    },
+    "cliproxyapi-pro-core": {
+      "path": "cliproxyapi-pro-core",
+      "purpose": null,
+      "fileCount": 4,
+      "lastAccessed": 1780244446721,
+      "keyFiles": [
+        "Dockerfile",
+        "entrypoint.sh",
+        "README.md",
+        "README_EN.md"
+      ]
+    },
+    "cliproxyapi-pro-management": {
+      "path": "cliproxyapi-pro-management",
+      "purpose": null,
+      "fileCount": 6,
+      "lastAccessed": 1780244446722,
+      "keyFiles": [
+        "apply.sh",
+        "apply_customizations.py",
+        "monitoring-locales.json",
+        "quota-persistence.patch",
+        "README.md"
+      ]
+    }
+  },
+  "hotPaths": [
+    {
+      "path": "cliproxyapi-pro-management\\overlay\\src\\pages\\MonitoringCenterPage.tsx",
+      "accessCount": 50,
+      "lastAccessed": 1780250207853,
+      "type": "file"
+    },
+    {
+      "path": "cliproxyapi-pro-management\\monitoring-locales.json",
+      "accessCount": 41,
+      "lastAccessed": 1780253203974,
+      "type": "file"
+    },
+    {
+      "path": "cliproxyapi-pro-management\\apply_customizations.py",
+      "accessCount": 28,
+      "lastAccessed": 1780253619144,
+      "type": "file"
+    },
+    {
+      "path": "",
+      "accessCount": 27,
+      "lastAccessed": 1780251401041,
+      "type": "directory"
+    },
+    {
+      "path": "cliproxyapi-pro-management",
+      "accessCount": 25,
+      "lastAccessed": 1780252103511,
+      "type": "directory"
+    },
+    {
+      "path": "cliproxyapi-pro-management\\overlay\\src\\pages\\RealtimeLogsPage.tsx",
+      "accessCount": 22,
+      "lastAccessed": 1780252976374,
+      "type": "file"
+    },
+    {
+      "path": "cliproxyapi-pro-management\\overlay\\src\\features\\monitoring\\hooks\\useUsageData.ts",
+      "accessCount": 14,
+      "lastAccessed": 1780252134766,
+      "type": "file"
+    },
+    {
+      "path": "C:\\Users\\yancj\\AppData\\Local\\Temp\\cpa-management-360s7lci\\src\\features\\providers\\sheets\\ResourceDetailView.tsx",
+      "accessCount": 8,
+      "lastAccessed": 1780249803737,
+      "type": "file"
+    },
+    {
+      "path": "cliproxyapi-pro-management\\overlay\\src\\pages",
+      "accessCount": 8,
+      "lastAccessed": 1780253009744,
+      "type": "directory"
+    },
+    {
+      "path": "cliproxyapi-pro-management\\overlay\\src",
+      "accessCount": 8,
+      "lastAccessed": 1780253449304,
+      "type": "directory"
+    },
+    {
+      "path": "C:\\Users\\yancj\\AppData\\Local\\Temp\\cpa-management-verify-60806\\src\\i18n\\locales\\zh-CN.json",
+      "accessCount": 6,
+      "lastAccessed": 1780252762663,
+      "type": "file"
+    },
+    {
+      "path": "cliproxyapi-pro-management\\overlay\\src\\pages\\MonitoringCenterPage.module.scss",
+      "accessCount": 6,
+      "lastAccessed": 1780253128638,
+      "type": "file"
+    },
+    {
+      "path": "cliproxyapi-pro-management\\overlay\\src\\features\\monitoring\\hooks\\useMonitoringData.ts",
+      "accessCount": 3,
+      "lastAccessed": 1780245476968,
+      "type": "file"
+    },
+    {
+      "path": "C:\\Users\\yancj\\AppData\\Local\\Temp\\cpa-management-360s7lci\\src",
+      "accessCount": 3,
+      "lastAccessed": 1780249095931,
+      "type": "directory"
+    },
+    {
+      "path": "C:\\Users\\yancj\\.claude\\plugins\\cache\\omc\\oh-my-claudecode\\4.14.4\\docs\\shared\\agent-tiers.md",
+      "accessCount": 2,
+      "lastAccessed": 1780245216723,
+      "type": "file"
+    },
+    {
+      "path": "cliproxyapi-pro-management\\README.md",
+      "accessCount": 2,
+      "lastAccessed": 1780248530127,
+      "type": "file"
+    },
+    {
+      "path": "C:\\Users\\yancj\\AppData\\Local\\Temp\\cpa-management-360s7lci",
+      "accessCount": 2,
+      "lastAccessed": 1780248849836,
+      "type": "directory"
+    },
+    {
+      "path": "C:\\Users\\yancj\\AppData\\Local\\Temp\\cpa-management-360s7lci\\src\\features\\providers\\sheets\\forms\\sharedForm.module.scss",
+      "accessCount": 2,
+      "lastAccessed": 1780249345490,
+      "type": "file"
+    },
+    {
+      "path": "C:\\Users\\yancj\\AppData\\Local\\Temp\\cpa-management-360s7lci\\src\\features\\providers\\sheets",
+      "accessCount": 2,
+      "lastAccessed": 1780249616493,
+      "type": "directory"
+    },
+    {
+      "path": "C:\\Users\\yancj\\AppData\\Local\\Temp\\cpa-management-360s7lci\\package.json",
+      "accessCount": 2,
+      "lastAccessed": 1780249682301,
+      "type": "file"
+    },
+    {
+      "path": "C:\\Users\\yancj\\AppData\\Local\\Temp\\cpa-management-360s7lci\\src\\i18n\\locales",
+      "accessCount": 2,
+      "lastAccessed": 1780249698024,
+      "type": "directory"
+    },
+    {
+      "path": "C:\\Users\\yancj\\AppData\\Local\\Temp",
+      "accessCount": 2,
+      "lastAccessed": 1780251429423,
+      "type": "directory"
+    },
+    {
+      "path": "C:\\Users\\yancj\\AppData\\Local\\Temp\\cpa-management-verify-60806\\src\\features\\providers",
+      "accessCount": 2,
+      "lastAccessed": 1780253488484,
+      "type": "directory"
+    },
+    {
+      "path": "C:\\Users\\yancj\\.claude\\plugins\\cache\\omc\\oh-my-claudecode\\4.14.4",
+      "accessCount": 1,
+      "lastAccessed": 1780244706051,
+      "type": "directory"
+    },
+    {
+      "path": "cliproxyapi-pro-core\\README.md",
+      "accessCount": 1,
+      "lastAccessed": 1780244916990,
+      "type": "file"
+    },
+    {
+      "path": "README.md",
+      "accessCount": 1,
+      "lastAccessed": 1780244916995,
+      "type": "file"
+    },
+    {
+      "path": ".claude\\plan\\PLAN.md",
+      "accessCount": 1,
+      "lastAccessed": 1780244917019,
+      "type": "file"
+    },
+    {
+      "path": ".claude\\plan\\task-003-stabilize-quota-storage-cache.md",
+      "accessCount": 1,
+      "lastAccessed": 1780244942021,
+      "type": "file"
+    },
+    {
+      "path": ".claude\\plan\\task-002-normalize-api-response-contracts.md",
+      "accessCount": 1,
+      "lastAccessed": 1780244942026,
+      "type": "file"
+    },
+    {
+      "path": ".claude\\plan\\task-004-preserve-monitoring-hook-page-composition.md",
+      "accessCount": 1,
+      "lastAccessed": 1780244942035,
+      "type": "file"
+    },
+    {
+      "path": "cliproxyapi-pro-management\\apply.sh",
+      "accessCount": 1,
+      "lastAccessed": 1780248530118,
+      "type": "file"
+    },
+    {
+      "path": "C:\\Users\\yancj\\AppData\\Local\\Temp\\claude\\I--Code-PythonCode-CLIProxyAPI-Pro\\5799f6bc-f45e-4be6-badf-7227a67dc7dd\\tasks\\bgz7k7z8w.output",
+      "accessCount": 1,
+      "lastAccessed": 1780248849776,
+      "type": "file"
+    },
+    {
+      "path": "C:\\Users\\yancj\\AppData\\Local\\Temp\\cpa-management-360s7lci\\src\\features\\providers\\components\\ProviderResourceTable.tsx",
+      "accessCount": 1,
+      "lastAccessed": 1780249111876,
+      "type": "file"
+    },
+    {
+      "path": "C:\\Users\\yancj\\AppData\\Local\\Temp\\cpa-management-360s7lci\\src\\features\\providers\\ProvidersWorkbenchPage.tsx",
+      "accessCount": 1,
+      "lastAccessed": 1780249111887,
+      "type": "file"
+    },
+    {
+      "path": "C:\\Users\\yancj\\AppData\\Local\\Temp\\cpa-management-360s7lci\\src\\types\\provider.ts",
+      "accessCount": 1,
+      "lastAccessed": 1780249111933,
+      "type": "file"
+    },
+    {
+      "path": "C:\\Users\\yancj\\AppData\\Local\\Temp\\cpa-management-360s7lci\\src\\features\\providers",
+      "accessCount": 1,
+      "lastAccessed": 1780249111979,
+      "type": "directory"
+    },
+    {
+      "path": "C:\\Users\\yancj\\AppData\\Local\\Temp\\cpa-management-360s7lci\\src\\features\\providers\\sheets\\ProviderSheet.tsx",
+      "accessCount": 1,
+      "lastAccessed": 1780249125337,
+      "type": "file"
+    },
+    {
+      "path": "C:\\Users\\yancj\\AppData\\Local\\Temp\\cpa-management-360s7lci\\src\\features\\providers\\types.ts",
+      "accessCount": 1,
+      "lastAccessed": 1780249125342,
+      "type": "file"
+    },
+    {
+      "path": "C:\\Users\\yancj\\AppData\\Local\\Temp\\cpa-management-360s7lci\\src\\features\\providers\\adapters.ts",
+      "accessCount": 1,
+      "lastAccessed": 1780249147343,
+      "type": "file"
+    },
+    {
+      "path": "C:\\Users\\yancj\\AppData\\Local\\Temp\\cpa-management-360s7lci\\src\\types",
+      "accessCount": 1,
+      "lastAccessed": 1780249283094,
+      "type": "directory"
+    },
+    {
+      "path": "C:\\Users\\yancj\\AppData\\Local\\Temp\\cpa-management-360s7lci\\src\\types\\ampcode.ts",
+      "accessCount": 1,
+      "lastAccessed": 1780249364683,
+      "type": "file"
+    },
+    {
+      "path": "C:\\Users\\yancj\\AppData\\Local\\Temp\\cpa-management-360s7lci\\src\\features\\providers\\sheets\\forms",
+      "accessCount": 1,
+      "lastAccessed": 1780249364841,
+      "type": "directory"
+    },
+    {
+      "path": "C:\\Users\\yancj\\AppData\\Local\\Temp\\cpa-management-360s7lci\\src\\i18n\\locales\\en.json",
+      "accessCount": 1,
+      "lastAccessed": 1780249713590,
+      "type": "file"
+    },
+    {
+      "path": "C:\\Users\\yancj\\AppData\\Local\\Temp\\claude\\I--Code-PythonCode-CLIProxyAPI-Pro\\5799f6bc-f45e-4be6-badf-7227a67dc7dd\\tasks\\byovssu7u.output",
+      "accessCount": 1,
+      "lastAccessed": 1780249958912,
+      "type": "file"
+    },
+    {
+      "path": "C:\\Users\\yancj\\AppData\\Local\\Temp\\cpa-management-verify-60806\\src\\components\\layout",
+      "accessCount": 1,
+      "lastAccessed": 1780251793069,
+      "type": "directory"
+    },
+    {
+      "path": "C:\\Users\\yancj\\AppData\\Local\\Temp\\cpa-management-verify-60806\\src\\i18n\\locales",
+      "accessCount": 1,
+      "lastAccessed": 1780251793075,
+      "type": "directory"
+    },
+    {
+      "path": "C:\\Users\\yancj\\AppData\\Local\\Temp\\cpa-management-verify-60806\\src\\i18n\\locales\\en.json",
+      "accessCount": 1,
+      "lastAccessed": 1780252762607,
+      "type": "file"
+    },
+    {
+      "path": "C:\\Users\\yancj\\AppData\\Local\\Temp\\cpa-management-verify-60806\\src\\pages",
+      "accessCount": 1,
+      "lastAccessed": 1780253488477,
+      "type": "directory"
+    },
+    {
+      "path": "C:\\Users\\yancj\\AppData\\Local\\Temp\\cpa-management-verify-60806\\src\\features\\providers\\ProvidersWorkbenchPage.tsx",
+      "accessCount": 1,
+      "lastAccessed": 1780253500660,
+      "type": "file"
+    }
+  ],
+  "userDirectives": []
+}

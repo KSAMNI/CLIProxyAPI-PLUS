@@ -1,0 +1,7 @@
+{
+  "tool_name": "Bash",
+  "tool_input_preview": "{\"command\":\"gh repo view \\\"yancj9ya/CLIProxyAPI-Pro\\\" --json nameWithOwner,url\",\"timeout\":120000,\"description\":\"Check user's fork repository\",\"run_in_background\":false,\"dangerouslyDisableSandbox\":fals...",
+  "error": "Exit code 1\nGraphQL: Could not resolve to a Repository with the name 'yancj9ya/CLIProxyAPI-Pro'. (repository)",
+  "timestamp": "2026-05-31T19:05:33.571Z",
+  "retry_count": 1
+}
