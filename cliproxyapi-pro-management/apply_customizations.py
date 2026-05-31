@@ -56,7 +56,7 @@ _writes = {}
 def read(path: Path) -> str:
     if path in _writes:
         return _writes[path]
-    return path.read_text()
+    return path.read_text(encoding='utf-8')
 
 
 def write(path: Path, text: str) -> None:
@@ -65,7 +65,7 @@ def write(path: Path, text: str) -> None:
 
 def flush_writes() -> None:
     for path, text in _writes.items():
-        path.write_text(text)
+        path.write_text(text, encoding='utf-8')
 
 
 def replace_once(path: Path, old: str, new: str) -> None:
@@ -109,12 +109,12 @@ def patch_routes(target: Path) -> None:
     replace_once(
         path,
         "import { QuotaPage } from '@/pages/QuotaPage';\n",
-        "import { QuotaPage } from '@/pages/QuotaPage';\nimport { MonitoringCenterPage } from '@/pages/MonitoringCenterPage';\nimport { AccountInspectionPage } from '@/pages/AccountInspectionPage';\n",
+        "import { QuotaPage } from '@/pages/QuotaPage';\nimport { MonitoringCenterPage } from '@/pages/MonitoringCenterPage';\nimport { RealtimeLogsPage } from '@/pages/RealtimeLogsPage';\n",
     )
     replace_once(
         path,
         "  { path: '/quota', element: <QuotaPage /> },\n",
-        "  { path: '/quota', element: <QuotaPage /> },\n  { path: '/monitoring', element: <MonitoringCenterPage /> },\n  { path: '/account-inspection', element: <AccountInspectionPage /> },\n",
+        "  { path: '/quota', element: <QuotaPage /> },\n  { path: '/monitoring', element: <MonitoringCenterPage /> },\n  { path: '/realtime-logs', element: <RealtimeLogsPage /> },\n",
     )
 
 
@@ -155,7 +155,7 @@ def patch_layout(target: Path) -> None:
                     flat_quota_item,
                     flat_quota_item
                     + "    { path: '/monitoring', label: t('nav.monitoring_center'), icon: sidebarIcons.monitoring },\n"
-                    + "    { path: '/account-inspection', label: t('nav.account_inspection'), icon: sidebarIcons.monitoring },\n",
+                    + "    { path: '/realtime-logs', label: t('nav.realtime_logs'), icon: sidebarIcons.monitoring },\n",
                     1,
                 ),
             )
@@ -172,9 +172,9 @@ def patch_layout(target: Path) -> None:
                     + "          icon: sidebarIcons.monitoring,\n"
                     + "        },\n"
                     + "        {\n"
-                    + "          path: '/account-inspection',\n"
-                    + "          labelKey: 'nav.account_inspection',\n"
-                    + "          metaKey: 'nav_meta.account_inspection',\n"
+                    + "          path: '/realtime-logs',\n"
+                    + "          labelKey: 'nav.realtime_logs',\n"
+                    + "          metaKey: 'nav_meta.realtime_logs',\n"
                     + "          icon: sidebarIcons.monitoring,\n"
                     + "        },\n",
                     1,
@@ -329,13 +329,6 @@ def patch_supporting_api_and_types(target: Path) -> None:
         "  setStatus: (name: string, disabled: boolean) =>\n    apiClient.patch<AuthFileStatusResponse>('/auth-files/status', { name, disabled }),\n\n  setStatusWithFallback: async (name: string, disabled: boolean) => {\n    try {\n      return await authFilesApi.patchFile({ name, disabled });\n    } catch {\n      return authFilesApi.setStatus(name, disabled);\n    }\n  },\n\n  patchFields:",
     )
 
-    api_index_path = target / 'src/services/api/index.ts'
-    replace_once(
-        api_index_path,
-        "export * from './apiCall';\n",
-        "export * from './apiCall';\nexport * from './accountInspection';\n",
-    )
-
     format_path = target / 'src/utils/format.ts'
     insert_once(
         format_path,
@@ -389,11 +382,44 @@ def patch_supporting_api_and_types(target: Path) -> None:
             raise RuntimeError(f'Pattern not found in {select_path}: Select trigger className')
 
 
+def patch_provider_disabled_sort(target: Path) -> None:
+    path = target / 'src/features/providers/ProvidersWorkbenchPage.tsx'
+    replace_once(
+        path,
+        "  const visibleResources = useMemo(() => {\n    if (!isOpenAI) return filteredResources;\n\n    let arr = filteredResources;\n",
+        "  const visibleResources = useMemo(() => {\n    if (!isOpenAI) {\n      return [...filteredResources].sort((a, b) => Number(a.disabled) - Number(b.disabled));\n    }\n\n    let arr = filteredResources;\n",
+    )
+    replace_once(
+        path,
+        "    const sorted = [...arr].sort((a, b) => {\n      let diff = 0;\n",
+        "    const sorted = [...arr].sort((a, b) => {\n      const disabledDiff = Number(a.disabled) - Number(b.disabled);\n      if (disabledDiff !== 0) return disabledDiff;\n\n      let diff = 0;\n",
+    )
+
+
+def patch_provider_detail_models(target: Path) -> None:
+    path = target / 'src/features/providers/sheets/ResourceDetailView.tsx'
+    replace_once(
+        path,
+        "import type { OpenAIProviderConfig } from '@/types';\n",
+        "import type { AmpcodeConfig, OpenAIProviderConfig } from '@/types';\n",
+    )
+    replace_once(
+        path,
+        "  const openaiConfig =\n    resource.brand === 'openaiCompatibility'\n      ? (resource.raw as OpenAIProviderConfig)\n      : null;\n  const apiKeyEntries = openaiConfig?.apiKeyEntries ?? [];\n\n  return (\n",
+        "  const openaiConfig =\n    resource.brand === 'openaiCompatibility'\n      ? (resource.raw as OpenAIProviderConfig)\n      : null;\n  const ampcodeConfig = resource.brand === 'ampcode' ? (resource.raw as AmpcodeConfig) : null;\n  const apiKeyEntries = openaiConfig?.apiKeyEntries ?? [];\n  const modelEntries =\n    resource.brand === 'ampcode'\n      ? (ampcodeConfig?.modelMappings ?? []).map((mapping, index) => ({\n          key: `${mapping.from ?? 'from'}-${mapping.to ?? 'to'}-${index}`,\n          title: mapping.from?.trim() || t('providersPage.status.notSet'),\n          subtitle: mapping.to?.trim() || t('providersPage.status.notSet'),\n        }))\n      : ((resource.raw as { models?: Array<{ name?: string; alias?: string; priority?: number; testModel?: string }> })\n          .models ?? []).map((model, index) => {\n          const details = [\n            model.alias?.trim() ? `${t('alias')}: ${model.alias.trim()}` : '',\n            typeof model.priority === 'number'\n              ? `${t('providersPage.form.priority')}: ${model.priority}`\n              : '',\n            model.testModel?.trim() ? `${t('providersPage.form.testModel')}: ${model.testModel.trim()}` : '',\n          ].filter(Boolean);\n          return {\n            key: `${model.name ?? 'model'}-${index}`,\n            title: model.name?.trim() || t('providersPage.status.notSet'),\n            subtitle: details.join(' · '),\n          };\n        });\n\n  return (\n",
+    )
+    replace_once(
+        path,
+        "      <dl className={styles.dl}>\n        {primary.map(([key, value]) => (\n          <div key={key}>\n            <dt className={styles.dt}>{t(`providersPage.detail.fields.${key}`)}</dt>\n            <dd className={styles.dd}>{value}</dd>\n          </div>\n        ))}\n      </dl>\n\n      {openaiConfig && apiKeyEntries.length > 0 ? (\n",
+        "      <dl className={styles.dl}>\n        {primary.map(([key, value]) => (\n          <div key={key}>\n            <dt className={styles.dt}>{t(`providersPage.detail.fields.${key}`)}</dt>\n            <dd className={styles.dd}>{value}</dd>\n          </div>\n        ))}\n      </dl>\n\n      {modelEntries.length > 0 ? (\n        <div style={{ marginTop: 16 }}>\n          <div className={styles.apiKeyEntriesLabel}>{t('providersPage.detail.fields.models')}</div>\n          <div className={styles.apiKeyEntryList}>\n            {modelEntries.map((entry, index) => (\n              <div key={entry.key} className={styles.apiKeyEntryCard}>\n                <span className={styles.apiKeyEntryIndex}>{index + 1}</span>\n                <span className={styles.apiKeyEntryKey}>{entry.title}</span>\n                {entry.subtitle ? (\n                  <span className={styles.apiKeyEntryProxy}>{entry.subtitle}</span>\n                ) : null}\n              </div>\n            ))}\n          </div>\n        </div>\n      ) : null}\n\n      {openaiConfig && apiKeyEntries.length > 0 ? (\n",
+    )
+
+
 def patch_locales(target: Path) -> None:
-    monitoring = json.loads(LOCALES_FILE.read_text())
+    monitoring = json.loads(LOCALES_FILE.read_text(encoding='utf-8'))
     locales_dir = target / 'src/i18n/locales'
     for locale_path in sorted(locales_dir.glob('*.json')):
-        data = json.loads(locale_path.read_text())
+        data = json.loads(locale_path.read_text(encoding='utf-8'))
         additions = monitoring.get(locale_path.name, {})
         data.setdefault('nav', {}).update(additions.get('nav', {}))
         nav_additions = additions.get('nav', {})
@@ -402,14 +428,14 @@ def patch_locales(target: Path) -> None:
                 'nav_meta',
                 {
                     'monitoring_center': nav_additions.get('monitoring_center', 'Request Monitoring'),
-                    'account_inspection': nav_additions.get('account_inspection', 'Account Inspection'),
+                    'realtime_logs': nav_additions.get('realtime_logs', 'Realtime Logs'),
                 },
             )
         )
         data['monitoring'] = additions.get('monitoring', data.get('monitoring', {}))
         data['usage_stats'] = additions.get('usage_stats', data.get('usage_stats', {}))
         data.setdefault('quota_management', {}).update(QUOTA_LOCALE_KEYS.get(locale_path.name, {}))
-        locale_path.write_text(json.dumps(data, ensure_ascii=False, indent=2) + '\n')
+        locale_path.write_text(json.dumps(data, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
 
 
 def main() -> None:
@@ -430,6 +456,8 @@ def main() -> None:
     patch_quota_page(target)
     patch_quota_card(target)
     patch_supporting_api_and_types(target)
+    patch_provider_disabled_sort(target)
+    patch_provider_detail_models(target)
     patch_locales(target)
     flush_writes()
     print(f'OK: CPA-Management customization applied to {target}')

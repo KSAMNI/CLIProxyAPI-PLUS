@@ -1,4 +1,4 @@
-import { useCallback, useDeferredValue, useEffect, useId, useMemo, useRef, useState, type ChangeEvent, type CSSProperties, type ReactNode } from 'react';
+import { useCallback, useEffect, useId, useMemo, useRef, useState, type ChangeEvent, type CSSProperties, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
 import { Button } from '@/components/ui/Button';
@@ -11,7 +11,6 @@ import {
   IconChevronUp,
   IconRefreshCw,
   IconSearch,
-  IconSlidersHorizontal,
 } from '@/components/ui/icons';
 import {
   buildAccountRowsByAccount,
@@ -27,7 +26,6 @@ import {
   useMonitoringData,
   type MonitoringAccountRow,
   type MonitoringEventRow,
-  type MonitoringStatusTone,
   type MonitoringTimeRange,
 } from '@/features/monitoring/hooks/useMonitoringData';
 import { useUsageData } from '@/features/monitoring/hooks/useUsageData';
@@ -35,9 +33,8 @@ import { useHeaderRefresh } from '@/hooks/useHeaderRefresh';
 import { apiClient } from '@/services/api/client';
 import { useAuthStore, useConfigStore, useNotificationStore, useQuotaStore } from '@/stores';
 import type { AuthFileItem } from '@/types';
-import { maskSensitiveText } from '@/utils/format';
 import { getStatusFromError, isAntigravityFile, isClaudeFile, isCodexFile, isGeminiCliFile, isKimiFile, isRuntimeOnlyAuthFile } from '@/utils/quota';
-import { formatCompactNumber, formatDurationMs, formatUsd, normalizeAuthIndex, type ModelPrice } from '@/utils/usage';
+import { formatCompactNumber, formatUsd, normalizeAuthIndex, type ModelPrice } from '@/utils/usage';
 import {
   ANTIGRAVITY_CONFIG,
   CLAUDE_CONFIG,
@@ -58,8 +55,6 @@ const TIME_RANGE_OPTIONS: Array<{ value: MonitoringTimeRange; labelKey: string }
   { value: '30d', labelKey: 'monitoring.range_30d' },
   { value: 'all', labelKey: 'monitoring.range_all' },
 ];
-
-type StatusFilter = 'all' | 'success' | 'failed';
 
 type UsageMetricCard = {
   key: string;
@@ -311,15 +306,6 @@ type MonitoringSettingsDraft = {
   webdavPassword: string;
 };
 
-type RealtimeLogRow = MonitoringEventRow & {
-  requestCount: number;
-  successRate: number;
-  streamKey: string;
-  recentPattern: boolean[];
-  recentSuccessCount: number;
-  recentFailureCount: number;
-};
-
 type UsageImportResult = {
   added?: number;
   skipped?: number;
@@ -329,8 +315,6 @@ type UsageImportResult = {
   modelPriceRecords?: number;
   quotaCache?: number;
   quotaCacheRecords?: number;
-  accountInspectionSchedule?: boolean;
-  accountInspectionScheduleRecords?: number;
   monitoringSettings?: boolean;
   monitoringSettingsRecords?: number;
 };
@@ -718,11 +702,6 @@ const buildTokenDistributionPoints = (rows: MonitoringEventRow[], range: Monitor
   return Array.from(grouped.values()).sort((left, right) => left.key.localeCompare(right.key)).slice(-24);
 };
 
-const buildRealtimeMetaText = (row: MonitoringEventRow) => {
-  const text = `${row.endpointMethod} ${row.endpointPath}`.trim();
-  return maskSensitiveText(text || '-');
-};
-
 const QUOTA_RENDER_HELPERS: QuotaRenderHelpers = {
   styles: quotaStyles,
   QuotaProgressBar,
@@ -833,42 +812,6 @@ const buildAccountQuotaEntriesByAccount = (
     } satisfies AccountQuotaEntry)),
   ])
 );
-
-const buildRealtimeLogRows = (rows: MonitoringEventRow[]): RealtimeLogRow[] => {
-  const sortedAsc = [...rows].sort(
-    (left, right) => left.timestampMs - right.timestampMs || left.id.localeCompare(right.id)
-  );
-  const metricsByStream = new Map<string, { total: number; success: number; pattern: boolean[] }>();
-
-  const enriched = sortedAsc.map((row) => {
-    const streamKey = [row.account, row.provider, row.model, row.channel].join('::');
-    const previous = metricsByStream.get(streamKey) ?? { total: 0, success: 0, pattern: [] };
-    const nextPattern = [...previous.pattern, !row.failed].slice(-10);
-    const next = {
-      total: previous.total + (row.statsIncluded ? 1 : 0),
-      success: previous.success + (row.statsIncluded && !row.failed ? 1 : 0),
-      pattern: nextPattern,
-    };
-    metricsByStream.set(streamKey, next);
-
-    return {
-      ...row,
-      streamKey,
-      requestCount: next.total,
-      successRate: next.total > 0 ? next.success / next.total : 1,
-      recentPattern: nextPattern,
-      recentSuccessCount: nextPattern.filter(Boolean).length,
-      recentFailureCount: nextPattern.filter((item) => !item).length,
-    } satisfies RealtimeLogRow;
-  });
-
-  return enriched.sort(
-    (left, right) =>
-      right.timestampMs - left.timestampMs ||
-      right.requestCount - left.requestCount ||
-      right.id.localeCompare(left.id)
-  );
-};
 
 function UsageTrendHeader({
   range,
@@ -2321,46 +2264,6 @@ function AccountStatsPanel({
   );
 }
 
-function StatusBadge({ tone, children }: { tone: MonitoringStatusTone; children: ReactNode }) {
-  return <span className={`${styles.statusBadge} ${styles[`tone${tone}`]}`}>{children}</span>;
-}
-
-function RecentPattern({
-  pattern,
-  variant = 'default',
-  label,
-}: {
-  pattern: boolean[];
-  variant?: 'default' | 'plain';
-  label?: string;
-}) {
-  const normalized = pattern.length > 0 ? pattern : Array.from({ length: 10 }, () => true);
-  const successCount = normalized.filter(Boolean).length;
-  const failureCount = normalized.length - successCount;
-  const ariaLabel = label ?? `Recent ${normalized.length} requests: ${successCount} succeeded, ${failureCount} failed`;
-  const containerClassName = [
-    styles.patternBars,
-    variant === 'plain' ? styles.patternBarsPlain : '',
-  ]
-    .filter(Boolean)
-    .join(' ');
-  const barClassName = [styles.patternBar, variant === 'plain' ? styles.patternBarPlain : '']
-    .filter(Boolean)
-    .join(' ');
-
-  return (
-    <div className={containerClassName} role="img" aria-label={ariaLabel}>
-      {normalized.map((item, index) => (
-        <span
-          key={index}
-          className={`${barClassName} ${item ? styles.patternSuccess : styles.patternFailed}`}
-          aria-hidden="true"
-        />
-      ))}
-    </div>
-  );
-}
-
 export function MonitoringCenterPage() {
   const { t, i18n } = useTranslation();
   const config = useConfigStore((state) => state.config);
@@ -2368,11 +2271,6 @@ export function MonitoringCenterPage() {
   const showNotification = useNotificationStore((state) => state.showNotification);
   const quotaStore = useQuotaStore((state) => state);
   const [timeRange, setTimeRange] = useState<MonitoringTimeRange>('today');
-  const [searchInput, setSearchInput] = useState('');
-  const [selectedProvider, setSelectedProvider] = useState('all');
-  const [selectedModel, setSelectedModel] = useState('all');
-  const [selectedApiKey, setSelectedApiKey] = useState('all');
-  const [selectedStatus, setSelectedStatus] = useState<StatusFilter>('all');
   const [expandedAccounts, setExpandedAccounts] = useState<Record<string, boolean>>({});
   const [isPriceModalOpen, setIsPriceModalOpen] = useState(false);
   const [isMonitoringSettingsOpen, setIsMonitoringSettingsOpen] = useState(false);
@@ -2392,18 +2290,15 @@ export function MonitoringCenterPage() {
   const [isAccountStatsHidden, setIsAccountStatsHidden] = useState(false);
   const accountQuotaStatesRef = useRef<Record<string, AccountQuotaState>>({});
   const accountQuotaRequestIdsRef = useRef<Record<string, number>>({});
-  const deferredSearch = useDeferredValue(searchInput);
 
   const {
     usage,
-    error: usageError,
     modelPrices,
     setModelPrices,
     refreshUsage,
   } = useUsageData();
 
   const {
-    error: monitoringError,
     authFiles,
     allRows,
     filteredRows,
@@ -2413,7 +2308,7 @@ export function MonitoringCenterPage() {
     config,
     modelPrices,
     timeRange,
-    searchQuery: deferredSearch,
+    searchQuery: '',
     deletedCredentialLabel: t('monitoring.deleted_credential'),
   });
 
@@ -2509,7 +2404,6 @@ export function MonitoringCenterPage() {
         const importedExtras = [
           (result.modelPriceRecords ?? 0) > 0 ? t('usage_stats.import_model_prices_restored', { count: result.modelPrices ?? 0 }) : '',
           (result.quotaCacheRecords ?? 0) > 0 ? t('usage_stats.import_quota_cache_restored', { count: result.quotaCache ?? 0 }) : '',
-          result.accountInspectionSchedule ? t('usage_stats.import_account_inspection_schedule_restored') : '',
           result.monitoringSettings ? t('usage_stats.import_monitoring_settings_restored') : '',
         ].filter(Boolean).join(' · ');
         showNotification(
@@ -2536,7 +2430,6 @@ export function MonitoringCenterPage() {
 
   useHeaderRefresh(refreshAll);
 
-  const combinedError = [usageError, monitoringError].filter(Boolean).join('；');
   const hasPrices = Object.keys(modelPrices).length > 0;
 
   useEffect(() => {
@@ -2549,39 +2442,6 @@ export function MonitoringCenterPage() {
       setter(updater);
     },
     []
-  );
-
-  const providerOptions = useMemo(
-    () => [
-      { value: 'all', label: t('monitoring.filter_all_providers') },
-      ...Array.from(new Set(filteredRows.map((row) => row.provider)))
-        .filter(Boolean)
-        .sort((left, right) => left.localeCompare(right))
-        .map((value) => ({ value, label: value })),
-    ],
-    [filteredRows, t]
-  );
-
-  const modelOptions = useMemo(
-    () => [
-      { value: 'all', label: t('monitoring.filter_all_models') },
-      ...Array.from(new Set(filteredRows.map((row) => row.model)))
-        .filter(Boolean)
-        .sort((left, right) => left.localeCompare(right))
-        .map((value) => ({ value, label: value })),
-    ],
-    [filteredRows, t]
-  );
-
-  const apiKeyOptions = useMemo(() => buildApiKeyFilterOptions(filteredRows, t('monitoring.filter_all_api_keys')), [filteredRows, t]);
-
-  const statusOptions = useMemo(
-    () => [
-      { value: 'all', label: t('monitoring.filter_all_statuses') },
-      { value: 'success', label: t('monitoring.filter_status_success') },
-      { value: 'failed', label: t('monitoring.filter_status_failed') },
-    ],
-    [t]
   );
 
   const priceModelOptions = useMemo(
@@ -2604,29 +2464,6 @@ export function MonitoringCenterPage() {
     });
     return map;
   }, [authFiles]);
-
-  const scopedRows = useMemo(
-    () =>
-      filteredRows.filter((row) => {
-        if (selectedProvider !== 'all' && row.provider !== selectedProvider) {
-          return false;
-        }
-        if (selectedModel !== 'all' && row.model !== selectedModel) {
-          return false;
-        }
-        if (selectedApiKey !== 'all' && row.clientApiKey.hash !== selectedApiKey) {
-          return false;
-        }
-        if (selectedStatus === 'success' && row.failed) {
-          return false;
-        }
-        if (selectedStatus === 'failed' && !row.failed) {
-          return false;
-        }
-        return true;
-      }),
-    [filteredRows, selectedApiKey, selectedModel, selectedProvider, selectedStatus]
-  );
 
   const usageRowGroups = useMemo(() => {
     const nowMs = Date.now();
@@ -2740,8 +2577,6 @@ export function MonitoringCenterPage() {
     [accountStatsMetric, accountStatsFilteredRows]
   );
   const timeRangeLabel = useMemo(() => buildUsageTrendRangeLabel(timeRange, t), [timeRange, t]);
-  const realtimeLogRows = useMemo(() => buildRealtimeLogRows(scopedRows), [scopedRows]);
-
   const accountQuotaTargetsByAccount = useMemo(
     () => buildAccountQuotaTargetsByAccount(accountStatsFilteredRows, authFilesByAuthIndex),
     [authFilesByAuthIndex, accountStatsFilteredRows]
@@ -2752,17 +2587,10 @@ export function MonitoringCenterPage() {
   );
   const quotaTargetsByAccountForLoading = accountQuotaTargetsByAccount;
 
-  const activeScopeRows = scopedRows;
-  const scopedFailureCount = activeScopeRows.filter((row) => row.failed).length;
   const savedPriceEntries = useMemo(
     () => Object.entries(modelPrices).sort((left, right) => left[0].localeCompare(right[0])),
     [modelPrices]
   );
-
-  const selectedFiltersCount =
-    [selectedProvider, selectedModel, selectedApiKey, selectedStatus].filter(
-      (value) => value !== 'all'
-    ).length + (deferredSearch.trim() ? 1 : 0);
 
   const usageMetricCards: UsageMetricCard[] = [
     {
@@ -2810,14 +2638,6 @@ export function MonitoringCenterPage() {
       ],
     },
   ];
-
-  const clearFilters = useCallback(() => {
-    setSearchInput('');
-    setSelectedProvider('all');
-    setSelectedModel('all');
-    setSelectedApiKey('all');
-    setSelectedStatus('all');
-  }, []);
 
   const loadAccountQuota = useCallback(
     async (account: string, force: boolean = false) => {
@@ -3105,182 +2925,6 @@ export function MonitoringCenterPage() {
           </button>
         </section>
       )}
-
-      <section className={styles.usageTrendSection}>
-        <div className={styles.usageTrendHeader}>
-          <div className={styles.usageTrendCopy}>
-            <h2>{t('monitoring.analysis_tab_logs')}</h2>
-            <p>
-              {selectedFiltersCount > 0
-                ? t('monitoring.active_filters_hint', { count: selectedFiltersCount, rows: activeScopeRows.length })
-                : t('monitoring.realtime_table_desc')}
-            </p>
-          </div>
-          <div className={styles.usageTrendActions}>
-            <div className={`${styles.rankingMetricSwitch} ${styles.timeRangeControl}`}>
-              {TIME_RANGE_OPTIONS.map((option) => (
-                <button
-                  key={option.value}
-                  type="button"
-                  className={`${styles.rankingMetricButton} ${styles.timeRangeButton} ${timeRange === option.value ? styles.rankingMetricButtonActive : ''}`}
-                  onClick={() => setTimeRange(option.value)}
-                >
-                  {t(option.labelKey)}
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        <Card className={styles.realtimePanel}>
-        <div className={styles.filterGrid}>
-          <Input
-            value={searchInput}
-            onChange={(event) => setSearchInput(event.target.value)}
-            placeholder={t('monitoring.search_placeholder')}
-            className={styles.toolbarHeaderSearchInput}
-            rightElement={<IconSearch size={16} />}
-            aria-label={t('monitoring.search_placeholder')}
-          />
-          <Select
-            value={selectedApiKey}
-            options={apiKeyOptions}
-            onChange={setSelectedApiKey}
-            ariaLabel={t('monitoring.filter_api_key')}
-          />
-          <Select
-            value={selectedProvider}
-            options={providerOptions}
-            onChange={setSelectedProvider}
-            ariaLabel={t('monitoring.filter_provider')}
-          />
-          <Select
-            value={selectedModel}
-            options={modelOptions}
-            onChange={setSelectedModel}
-            ariaLabel={t('monitoring.filter_model')}
-          />
-          <Select
-            value={selectedStatus}
-            options={statusOptions}
-            onChange={(value) => setSelectedStatus(value as StatusFilter)}
-            ariaLabel={t('monitoring.filter_status')}
-          />
-          <button type="button" className={styles.clearButton} onClick={clearFilters}>
-            <IconSlidersHorizontal size={16} />
-            <span>{t('monitoring.clear_filters')}</span>
-          </button>
-        </div>
-
-        {combinedError ? <div className={styles.errorBox}>{combinedError}</div> : null}
-
-        <div className={styles.inlineMetrics}>
-          <span>{`${t('monitoring.log_rows')}: ${realtimeLogRows.length}`}</span>
-          <span>{`${t('monitoring.recent_failures')}: ${scopedFailureCount}`}</span>
-        </div>
-
-        <div className={`${styles.tableWrapper} ${styles.tableScrollWrapper} ${styles.realtimeTableWrapper}`}>
-          <table className={`${styles.table} ${styles.realtimeTable}`}>
-            <thead>
-              <tr>
-                <th>{t('monitoring.column_type')}</th>
-                <th>{t('monitoring.column_model')}</th>
-                <th>{t('monitoring.api_key_label')}</th>
-                <th>{t('monitoring.recent_status')}</th>
-                <th>{t('monitoring.request_status')}</th>
-                <th>{t('monitoring.column_success_rate')}</th>
-                <th>{t('monitoring.total_calls')}</th>
-                <th>{t('monitoring.column_latency')}</th>
-                <th>{t('monitoring.column_time')}</th>
-                <th>{t('monitoring.this_call_usage')}</th>
-                <th>{t('monitoring.this_call_cost')}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {realtimeLogRows.map((row) => (
-                <tr key={row.id} className={row.failed ? styles.logRowFailed : undefined}>
-                  <td>
-                    <div className={styles.primaryCell}>
-                      <span>{row.provider}</span>
-                      <small>{row.account || row.authLabel || row.accountMasked || '-'}</small>
-                    </div>
-                  </td>
-                  <td>
-                    <div className={styles.primaryCell}>
-                      <span className={styles.monoCell}>{row.model}</span>
-                      <small className={styles.monoCell}>{buildRealtimeMetaText(row)}</small>
-                    </div>
-                  </td>
-                  <td>
-                    <span className={styles.monoCell}>{row.clientApiKey.masked}</span>
-                  </td>
-                  <td>
-                    <div className={styles.recentStatusCell}>
-                      <RecentPattern
-                        pattern={row.recentPattern}
-                        variant="plain"
-                        label={t('monitoring.recent_pattern_label', {
-                          total: row.recentPattern.length,
-                          success: row.recentSuccessCount,
-                          failure: row.recentFailureCount,
-                        })}
-                      />
-                    </div>
-                  </td>
-                  <td>
-                    <StatusBadge tone={row.failed ? 'bad' : 'good'}>
-                      {row.failed ? t('monitoring.result_failed') : t('monitoring.result_success')}
-                    </StatusBadge>
-                  </td>
-                  <td
-                    className={
-                      row.successRate >= 0.95
-                        ? styles.goodText
-                        : row.successRate >= 0.85
-                          ? styles.warnText
-                          : styles.badText
-                    }
-                  >
-                    {formatPercent(row.successRate)}
-                  </td>
-                  <td>{formatCompactNumber(row.requestCount)}</td>
-                  <td>
-                    <span
-                      className={
-                        row.latencyMs !== null && row.latencyMs >= 30000
-                          ? styles.badText
-                          : row.latencyMs !== null && row.latencyMs >= 15000
-                            ? styles.warnText
-                            : undefined
-                      }
-                    >
-                      {formatDurationMs(row.latencyMs, { locale: i18n.language })}
-                    </span>
-                  </td>
-                  <td>{new Date(row.timestampMs).toLocaleString(i18n.language)}</td>
-                  <td>
-                    <div className={styles.primaryCell}>
-                      <span>{formatCompactNumber(row.totalTokens)}</span>
-                      <small>{`I ${formatCompactNumber(row.inputTokens)} · O ${formatCompactNumber(row.outputTokens)} · C ${formatCompactNumber(row.cachedTokens)}`}</small>
-                    </div>
-                  </td>
-                  <td>{hasPrices ? formatUsd(row.totalCost) : '--'}</td>
-                </tr>
-              ))}
-              {realtimeLogRows.length === 0 ? (
-                <tr>
-                  <td colSpan={11}>
-                    <div className={styles.emptyTable}>
-                      {deferredSearch.trim() ? t('monitoring.no_filtered_data') : t('monitoring.no_data')}
-                    </div>
-                  </td>
-                </tr>
-              ) : null}
-            </tbody>
-          </table>
-        </div>
-        </Card>
-      </section>
 
       <Modal
         open={isMonitoringSettingsOpen}

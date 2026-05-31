@@ -30,6 +30,8 @@ export interface UseUsageDataReturn {
   refreshUsage: () => Promise<void>;
 }
 
+const USAGE_STREAM_FLUSH_INTERVAL_MS = 250;
+
 const toNumber = (value: unknown) => (Number.isFinite(Number(value)) ? Number(value) : 0);
 
 type UsageModelEntry = { details?: unknown[]; [key: string]: unknown };
@@ -163,7 +165,7 @@ const loadUsageIncrementalSnapshot = async ({
   incrementalLoadingRef: MutableRef<boolean>;
   incrementalPendingRef: MutableRef<boolean>;
   loadUsage: () => Promise<void>;
-  applyUsagePayload: (payload: UsagePayload | null) => void;
+  applyUsagePayload: (payload: UsagePayload | null, immediate?: boolean) => void;
 }) => {
   if (incrementalLoadingRef.current) {
     incrementalPendingRef.current = true;
@@ -182,7 +184,7 @@ const loadUsageIncrementalSnapshot = async ({
 
       try {
         const payload = await apiClient.get<UsagePayload>(`/usage/events?after_id=${afterId}&limit=5000`);
-        applyUsagePayload(payload ?? null);
+        applyUsagePayload(payload ?? null, true);
       } catch {
         await loadUsage();
       }
@@ -204,7 +206,7 @@ const connectUsageStream = async ({
   managementKey: string;
   signal: AbortSignal;
   latestIdRef: MutableRef<number>;
-  applyUsagePayload: (payload: UsagePayload | null) => void;
+  applyUsagePayload: (payload: UsagePayload | null, immediate?: boolean) => void;
   loadUsageIncremental: () => Promise<void>;
 }) => {
   const decoder = new TextDecoder();
@@ -253,6 +255,8 @@ export function useUsageData(): UseUsageDataReturn {
   const latestIdRef = useRef(0);
   const incrementalLoadingRef = useRef(false);
   const incrementalPendingRef = useRef(false);
+  const pendingUsagePayloadRef = useRef<UsagePayload | null>(null);
+  const flushUsagePayloadTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const loadUsage = useCallback(() => loadUsageSnapshot({
     requestIdRef,
@@ -263,13 +267,31 @@ export function useUsageData(): UseUsageDataReturn {
     setLastRefreshedAt,
   }), []);
 
-  const applyUsagePayload = useCallback((payload: UsagePayload | null) => {
-    const nextLatestId = toNumber(payload?.latest_id);
-    if (nextLatestId <= latestIdRef.current) return;
-    latestIdRef.current = nextLatestId;
+  const flushUsagePayload = useCallback(() => {
+    const payload = pendingUsagePayloadRef.current;
+    if (!payload) return;
+    pendingUsagePayloadRef.current = null;
+    if (flushUsagePayloadTimerRef.current) {
+      clearTimeout(flushUsagePayloadTimerRef.current);
+      flushUsagePayloadTimerRef.current = null;
+    }
     setUsage((current) => mergeUsagePayload(current, payload));
     setLastRefreshedAt(new Date());
   }, []);
+
+  const applyUsagePayload = useCallback((payload: UsagePayload | null, immediate = false) => {
+    const nextLatestId = toNumber(payload?.latest_id);
+    if (nextLatestId <= latestIdRef.current) return;
+    latestIdRef.current = nextLatestId;
+    pendingUsagePayloadRef.current = mergeUsagePayload(pendingUsagePayloadRef.current, payload);
+    if (immediate) {
+      flushUsagePayload();
+      return;
+    }
+    if (!flushUsagePayloadTimerRef.current) {
+      flushUsagePayloadTimerRef.current = setTimeout(flushUsagePayload, USAGE_STREAM_FLUSH_INTERVAL_MS);
+    }
+  }, [flushUsagePayload]);
 
   const loadUsageIncremental = useCallback(() => loadUsageIncrementalSnapshot({
     latestIdRef,
@@ -347,6 +369,15 @@ export function useUsageData(): UseUsageDataReturn {
       if (timeoutId) clearTimeout(timeoutId);
     };
   }, [apiBase, applyUsagePayload, connectionStatus, loadUsageIncremental, managementKey]);
+
+  useEffect(() => {
+    return () => {
+      if (flushUsagePayloadTimerRef.current) {
+        clearTimeout(flushUsagePayloadTimerRef.current);
+        flushUsagePayloadTimerRef.current = null;
+      }
+    };
+  }, []);
 
   const setModelPrices = useCallback((prices: Record<string, ModelPrice>) => {
     setModelPricesState(prices);
