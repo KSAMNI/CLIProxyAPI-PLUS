@@ -382,17 +382,57 @@ def patch_supporting_api_and_types(target: Path) -> None:
             raise RuntimeError(f'Pattern not found in {select_path}: Select trigger className')
 
 
+def patch_provider_priority_badge(target: Path) -> None:
+    path = target / 'src/features/providers/components/ProviderResourceTable.tsx'
+    replace_once(
+        path,
+        "import type { OpenAIProviderConfig } from '@/types';\n",
+        "import type { GeminiKeyConfig, OpenAIProviderConfig, ProviderKeyConfig } from '@/types';\n",
+    )
+    insert_once(
+        path,
+        "  const renderPrimary = (r: ProviderResource) => {\n",
+        "  const renderPriorityBadge = (r: ProviderResource) => {\n    if (r.brand === 'ampcode') return null;\n    const priority =\n      r.brand === 'gemini'\n        ? (r.raw as GeminiKeyConfig).priority\n        : (r.raw as OpenAIProviderConfig | ProviderKeyConfig).priority;\n    if (typeof priority !== 'number') return null;\n    return (\n      <span\n        className={`${styles.statusBadge} ${styles.statusActive}`}\n        style={{ background: '#fef3c7', borderColor: '#f59e0b', color: '#b45309' }}\n      >\n        {t('providersPage.form.priority')}: {priority}\n      </span>\n    );\n  };\n\n  const renderPrimary = (r: ProviderResource) => {\n",
+        "const renderPriorityBadge = (r: ProviderResource)",
+    )
+    replace_once(
+        path,
+        "                  {renderStatus(resource)}\n",
+        "                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>\n                    {renderStatus(resource)}\n                    {renderPriorityBadge(resource)}\n                  </div>\n",
+    )
+
+
 def patch_provider_disabled_sort(target: Path) -> None:
     path = target / 'src/features/providers/ProvidersWorkbenchPage.tsx'
     replace_once(
         path,
+        "import type { OpenAIProviderConfig } from '@/types';\n",
+        "import type { GeminiKeyConfig, OpenAIProviderConfig, ProviderKeyConfig } from '@/types';\n",
+    )
+    replace_once(
+        path,
+        "const matchesFilter = (r: ProviderResource, normalized: string): boolean => {\n",
+        "const getProviderPriority = (r: ProviderResource): number => {\n  if (r.brand === 'ampcode') return 0;\n  const priority =\n    r.brand === 'gemini'\n      ? (r.raw as GeminiKeyConfig).priority\n      : (r.raw as OpenAIProviderConfig | ProviderKeyConfig).priority;\n  return typeof priority === 'number' ? priority : 0;\n};\n\nconst matchesFilter = (r: ProviderResource, normalized: string): boolean => {\n",
+    )
+    replace_once(
+        path,
+        "  const [openaiSortBy, setOpenaiSortBy] = useState<OpenAISortBy>('name');\n  const [openaiSortDir, setOpenaiSortDir] = useState<SortDir>('asc');\n",
+        "  const [openaiSortBy, setOpenaiSortBy] = useState<OpenAISortBy>('priority');\n  const [openaiSortDir, setOpenaiSortDir] = useState<SortDir>('desc');\n",
+    )
+    replace_once(
+        path,
         "  const visibleResources = useMemo(() => {\n    if (!isOpenAI) return filteredResources;\n\n    let arr = filteredResources;\n",
-        "  const visibleResources = useMemo(() => {\n    if (!isOpenAI) {\n      return [...filteredResources].sort((a, b) => Number(a.disabled) - Number(b.disabled));\n    }\n\n    let arr = filteredResources;\n",
+        "  const visibleResources = useMemo(() => {\n    if (!isOpenAI) {\n      return [...filteredResources].sort((a, b) => {\n        const disabledDiff = Number(a.disabled) - Number(b.disabled);\n        if (disabledDiff !== 0) return disabledDiff;\n        return getProviderPriority(b) - getProviderPriority(a);\n      });\n    }\n\n    let arr = filteredResources;\n",
     )
     replace_once(
         path,
         "    const sorted = [...arr].sort((a, b) => {\n      let diff = 0;\n",
         "    const sorted = [...arr].sort((a, b) => {\n      const disabledDiff = Number(a.disabled) - Number(b.disabled);\n      if (disabledDiff !== 0) return disabledDiff;\n\n      let diff = 0;\n",
+    )
+    replace_once(
+        path,
+        "        const ap = (a.raw as OpenAIProviderConfig).priority ?? 0;\n        const bp = (b.raw as OpenAIProviderConfig).priority ?? 0;\n        diff = ap - bp;\n",
+        "        diff = getProviderPriority(a) - getProviderPriority(b);\n",
     )
 
 
@@ -456,6 +496,7 @@ def main() -> None:
     patch_quota_page(target)
     patch_quota_card(target)
     patch_supporting_api_and_types(target)
+    patch_provider_priority_badge(target)
     patch_provider_disabled_sort(target)
     patch_provider_detail_models(target)
     patch_locales(target)
