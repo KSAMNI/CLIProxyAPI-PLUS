@@ -1,0 +1,716 @@
+- generic [ref=e48]:
+  - banner:
+    - button "收起" [ref=e49] [cursor=pointer]:
+      - img [ref=e50]
+    - generic [ref=e52]:
+      - button "刷新全部" [ref=e53] [cursor=pointer]:
+        - img [ref=e55]
+      - button "语言" [ref=e59] [cursor=pointer]:
+        - img [ref=e61]
+      - button "主题" [ref=e65] [cursor=pointer]:
+        - img [ref=e67]
+      - button "登出" [ref=e74] [cursor=pointer]:
+        - img [ref=e76]
+  - generic [ref=e79]:
+    - complementary [ref=e80]:
+      - generic "CLI Proxy API Management Center" [ref=e81]:
+        - img "CPAMC logo" [ref=e82]
+        - generic [ref=e83]: CPAMC
+      - generic [ref=e84]:
+        - generic [ref=e85]:
+          - generic [ref=e86]: 运行
+          - link "仪表盘 运行总览" [ref=e87] [cursor=pointer]:
+            - /url: "#/"
+            - img [ref=e89]
+            - generic [ref=e94]:
+              - generic [ref=e95]: 仪表盘
+              - generic [ref=e96]: 运行总览
+        - generic [ref=e97]:
+          - generic [ref=e98]: 网关
+          - link "AI 提供商 上游模型路由" [ref=e99] [cursor=pointer]:
+            - /url: "#/ai-providers"
+            - img [ref=e101]
+            - generic [ref=e106]:
+              - generic [ref=e107]: AI 提供商
+              - generic [ref=e108]: 上游模型路由
+          - link "认证文件 Auth 文件与凭证" [ref=e109] [cursor=pointer]:
+            - /url: "#/auth-files"
+            - img [ref=e111]
+            - generic [ref=e114]:
+              - generic [ref=e115]: 认证文件
+              - generic [ref=e116]: Auth 文件与凭证
+          - link "OAuth 登录 OAuth 授权登录" [ref=e117] [cursor=pointer]:
+            - /url: "#/oauth"
+            - img [ref=e119]
+            - generic [ref=e123]:
+              - generic [ref=e124]: OAuth 登录
+              - generic [ref=e125]: OAuth 授权登录
+        - generic [ref=e126]:
+          - generic [ref=e127]: 观测
+          - link "配额管理 API Key 与限额" [ref=e128] [cursor=pointer]:
+            - /url: "#/quota"
+            - img [ref=e130]
+            - generic [ref=e133]:
+              - generic [ref=e134]: 配额管理
+              - generic [ref=e135]: API Key 与限额
+          - link "数据统计 使用情况统计与运行趋势" [ref=e136] [cursor=pointer]:
+            - /url: "#/monitoring"
+            - img [ref=e138]
+            - generic [ref=e140]:
+              - generic [ref=e141]: 数据统计
+              - generic [ref=e142]: 使用情况统计与运行趋势
+          - link "请求监控 实时请求流" [ref=e143] [cursor=pointer]:
+            - /url: "#/realtime-logs"
+            - img [ref=e145]
+            - generic [ref=e147]:
+              - generic [ref=e148]: 请求监控
+              - generic [ref=e149]: 实时请求流
+        - generic [ref=e150]:
+          - generic [ref=e151]: 控制
+          - link "配置面板 网关基础配置" [ref=e152] [cursor=pointer]:
+            - /url: "#/config"
+            - img [ref=e154]
+            - generic [ref=e155]:
+              - generic [ref=e156]: 配置面板
+              - generic [ref=e157]: 网关基础配置
+          - link "中心信息 运行与诊断信息" [ref=e158] [cursor=pointer]:
+            - /url: "#/system"
+            - img [ref=e160]
+            - generic [ref=e163]:
+              - generic [ref=e164]: 中心信息
+              - generic [ref=e165]: 运行与诊断信息
+    - main [ref=e167]:
+      - generic [ref=e168]:
+        - generic:
+          - generic:
+            - generic:
+              - generic:
+                - heading [level=1]: 配置面板
+                - generic:
+                  - button: 可视化编辑
+                  - button: 源文件编辑
+            - generic:
+              - generic:
+                - generic: Request failed with status code 404
+                - generic:
+                  - generic:
+                    - generic:
+                      - generic:
+                        - generic: 快速跳转
+                        - generic: 服务器配置
+                  - generic:
+                    - complementary:
+                      - generic:
+                        - generic:
+                          - button:
+                            - generic: "01"
+                            - generic:
+                              - generic:
+                                - generic:
+                                  - generic:
+                                    - img
+                                  - generic: 服务器配置
+                          - button:
+                            - generic: "02"
+                            - generic:
+                              - generic:
+                                - generic:
+                                  - generic:
+                                    - img
+                                  - generic: 认证配置
+                          - button:
+                            - generic: "03"
+                            - generic:
+                              - generic:
+                                - generic:
+                                  - generic:
+                                    - img
+                                  - generic: 系统配置
+                          - button:
+                            - generic: "04"
+                            - generic:
+                              - generic:
+                                - generic:
+                                  - generic:
+                                    - img
+                                  - generic: 配额回退
+                          - button:
+                            - generic: "05"
+                            - generic:
+                              - generic:
+                                - generic:
+                                  - generic:
+                                    - img
+                                  - generic: 流式传输配置
+                          - button:
+                            - generic: "06"
+                            - generic:
+                              - generic:
+                                - generic:
+                                  - generic:
+                                    - img
+                                  - generic: Payload 配置
+                    - generic:
+                      - generic:
+                        - generic:
+                          - generic:
+                            - generic: "01"
+                            - generic:
+                              - img
+                          - generic:
+                            - heading [level=2]: 服务器配置
+                            - paragraph: 基础服务器设置
+                        - generic:
+                          - generic:
+                            - generic:
+                              - generic:
+                                - generic: 主机地址
+                                - generic:
+                                  - textbox [active]:
+                                    - /placeholder: 0.0.0.0
+                                    - text: http://yancj.dpdns.org:8317/
+                              - generic:
+                                - generic: 端口
+                                - generic:
+                                  - spinbutton
+                            - generic:
+                              - generic:
+                                - heading [level=3]: TLS/SSL 配置
+                                - paragraph: HTTPS 安全连接设置
+                              - generic:
+                                - generic:
+                                  - generic:
+                                    - generic: 启用 TLS
+                                    - generic: 启用 HTTPS 安全连接
+                            - generic:
+                              - generic:
+                                - heading [level=3]: 远程管理
+                                - paragraph: 远程访问和控制面板设置
+                              - generic:
+                                - generic:
+                                  - generic:
+                                    - generic:
+                                      - generic: 允许远程访问
+                                      - generic: 允许从其他主机访问管理接口
+                                  - generic:
+                                    - generic:
+                                      - generic: 禁用控制面板
+                                      - generic: 禁用内置的 Web 控制面板
+                                  - generic:
+                                    - generic:
+                                      - generic: 禁用面板自动更新
+                                      - generic: 首次缺失时仍可下载，但不再从 GitHub 后台自动更新
+                                - generic:
+                                  - generic:
+                                    - generic: 管理密钥
+                                    - generic:
+                                      - textbox:
+                                        - /placeholder: 设置管理密钥
+                                  - generic:
+                                    - generic: 面板仓库
+                                    - generic:
+                                      - textbox:
+                                        - /placeholder: https://github.com/router-for-me/Cli-Proxy-API-Management-Center
+                      - generic:
+                        - generic:
+                          - generic:
+                            - generic: "02"
+                            - generic:
+                              - img
+                          - generic:
+                            - heading [level=2]: 认证配置
+                            - paragraph: API 密钥与认证文件目录设置
+                        - generic:
+                          - generic:
+                            - generic:
+                              - generic: 认证文件目录 (auth-dir)
+                              - generic:
+                                - textbox:
+                                  - /placeholder: ~/.cli-proxy-api
+                              - generic: 存放认证文件的目录路径（支持 ~）
+                            - generic:
+                              - generic:
+                                - generic:
+                                  - generic: API 密钥列表 (api-keys)
+                                  - button:
+                                    - generic: 添加 API 密钥
+                                - generic: 暂无 API 密钥
+                                - generic: 每个条目代表一个 API 密钥（与 「API 密钥管理」 页面样式一致）
+                      - generic:
+                        - generic:
+                          - generic:
+                            - generic: "03"
+                            - generic:
+                              - img
+                          - generic:
+                            - heading [level=2]: 系统配置
+                            - paragraph: 调试、日志、统计与性能调试设置
+                        - generic:
+                          - generic:
+                            - generic:
+                              - generic:
+                                - generic:
+                                  - generic: 调试模式
+                                  - generic: 启用详细的调试日志
+                              - generic:
+                                - generic:
+                                  - generic: 商业模式
+                                  - generic: 禁用高开销中间件以支持高并发
+                              - generic:
+                                - generic:
+                                  - generic: 写入日志文件
+                                  - generic: 将日志保存到文件
+                            - generic:
+                              - generic:
+                                - generic: 日志文件大小限制 (MB)
+                                - generic:
+                                  - spinbutton
+                              - generic:
+                                - generic: 错误日志保留文件数
+                                - generic:
+                                  - spinbutton
+                              - generic:
+                                - generic: Redis 用量队列保留秒数
+                                - generic:
+                                  - spinbutton
+                                - generic: RESP 接口 LPOP/RPOP 用量队列的内存保留时间，最大 3600 秒
+                            - generic:
+                              - generic:
+                                - generic:
+                                  - generic: 启用内存用量统计
+                                  - generic: 启用内存中的请求用量聚合
+                              - generic:
+                                - generic:
+                                  - generic: 启用 Antigravity 签名缓存
+                                  - generic: 优先使用并校验缓存的 thinking block 签名
+                              - generic:
+                                - generic:
+                                  - generic: 严格校验旁路签名
+                                  - generic: 仅在关闭签名缓存时生效，按完整 Claude protobuf 树校验
+                            - generic:
+                              - generic:
+                                - heading [level=3]: Header 默认值
+                                - paragraph: Claude 与 Codex OAuth 请求在客户端缺少 Header 时使用的默认值
+                              - generic:
+                                - generic:
+                                  - heading [level=3]: Claude Header Defaults
+                                - generic:
+                                  - generic:
+                                    - generic: User-Agent
+                                    - generic:
+                                      - textbox:
+                                        - /placeholder: claude-cli/2.1.44 (external, sdk-cli)
+                                  - generic:
+                                    - generic: Package Version
+                                    - generic:
+                                      - textbox:
+                                        - /placeholder: 0.74.0
+                                  - generic:
+                                    - generic: Runtime Version
+                                    - generic:
+                                      - textbox:
+                                        - /placeholder: v24.3.0
+                                  - generic:
+                                    - generic: OS
+                                    - generic:
+                                      - textbox:
+                                        - /placeholder: MacOS
+                                  - generic:
+                                    - generic: Arch
+                                    - generic:
+                                      - textbox:
+                                        - /placeholder: arm64
+                                  - generic:
+                                    - generic: Timeout
+                                    - generic:
+                                      - textbox:
+                                        - /placeholder: "600"
+                                - generic:
+                                  - generic:
+                                    - generic:
+                                      - generic: 稳定设备指纹
+                                      - generic: 固定 OS/Arch，并按凭据/API Key 稳定软件指纹
+                                - generic:
+                                  - heading [level=3]: Codex Header Defaults
+                                - generic:
+                                  - generic:
+                                    - generic: User-Agent
+                                    - generic:
+                                      - textbox:
+                                        - /placeholder: codex_cli_rs/0.114.0 (Mac OS 14.2.0; x86_64) vscode/1.111.0
+                                  - generic:
+                                    - generic: Beta Features
+                                    - generic:
+                                      - textbox:
+                                        - /placeholder: multi_agent
+                            - generic:
+                              - generic:
+                                - heading [level=3]: 网络配置
+                                - paragraph: 代理、重试和路由设置
+                              - generic:
+                                - generic:
+                                  - generic:
+                                    - generic: 代理 URL
+                                    - generic:
+                                      - textbox:
+                                        - /placeholder: socks5://user:pass@127.0.0.1:1080/
+                                  - generic:
+                                    - generic: 请求重试次数
+                                    - generic:
+                                      - spinbutton
+                                  - generic:
+                                    - generic: 最大重试凭据数
+                                    - generic:
+                                      - spinbutton
+                                    - generic: 留空表示不设置；设为 0 表示保留 legacy 行为，并尝试所有可用凭据。
+                                  - generic:
+                                    - generic: 最大重试间隔 (秒)
+                                    - generic:
+                                      - spinbutton
+                                  - generic:
+                                    - generic: 认证自动刷新 Worker 数
+                                    - generic:
+                                      - spinbutton
+                                    - generic: 大于 0 时覆盖默认 Worker 数（16）
+                                  - generic:
+                                    - generic: 路由策略
+                                    - generic:
+                                      - button:
+                                        - generic: 轮询 (Round Robin)
+                                        - generic:
+                                          - img
+                                    - generic: 选择凭据选择策略
+                                  - generic:
+                                    - generic: 禁用图像生成
+                                    - generic:
+                                      - button:
+                                        - generic: false（启用）
+                                        - generic:
+                                          - img
+                                    - generic: false 为启用；true 为全部禁用；chat 仅禁用非图片端点注入
+                                  - generic:
+                                    - generic: 会话粘性 TTL
+                                    - generic:
+                                      - textbox:
+                                        - /placeholder: 1h
+                                - generic:
+                                  - generic:
+                                    - generic:
+                                      - generic: 强制模型前缀
+                                      - generic: 未带前缀的模型请求只使用无前缀凭据
+                                  - generic:
+                                    - generic:
+                                      - generic: 透传上游响应 Header
+                                      - generic: 将过滤后的上游响应 Header 转发给下游客户端
+                                  - generic:
+                                    - generic:
+                                      - generic: 禁用冷却调度
+                                      - generic: 全局禁用认证/模型失败后的冷却窗口
+                                  - generic:
+                                    - generic:
+                                      - generic: 会话粘性路由
+                                  - generic:
+                                    - generic:
+                                      - generic: WebSocket 认证
+                                      - generic: 启用 WebSocket 连接认证 (/v1/ws)
+                                  - generic:
+                                    - generic:
+                                      - generic: 启用 Gemini CLI 内部端点
+                                      - generic: 启用 /v1internal:* 兼容端点
+                      - generic:
+                        - generic:
+                          - generic:
+                            - generic: "04"
+                            - generic:
+                              - img
+                          - generic:
+                            - heading [level=2]: 配额回退
+                            - paragraph: 配额耗尽时的回退策略
+                        - generic:
+                          - generic:
+                            - generic:
+                              - generic:
+                                - generic: 切换项目
+                                - generic: 配额耗尽时自动切换到其他项目
+                            - generic:
+                              - generic:
+                                - generic: 切换预览模型
+                                - generic: 配额耗尽时切换到预览版本模型
+                            - generic:
+                              - generic:
+                                - generic: 使用Antigravity Credits
+                      - generic:
+                        - generic:
+                          - generic:
+                            - generic: "05"
+                            - generic:
+                              - img
+                          - generic:
+                            - heading [level=2]: 流式传输配置
+                            - paragraph: Keepalive 与 bootstrap 重试设置
+                        - generic:
+                          - generic:
+                            - generic:
+                              - generic:
+                                - generic: Keepalive 秒数
+                                - generic:
+                                  - spinbutton
+                                  - generic: 已禁用
+                                - generic: 设置为 0 或留空表示禁用 keepalive
+                              - generic:
+                                - generic: Bootstrap 重试次数
+                                - generic:
+                                  - spinbutton
+                                - generic: 流式传输启动时（首包前）的重试次数
+                            - generic:
+                              - generic:
+                                - generic: 非流式 Keepalive 间隔 (秒)
+                                - generic:
+                                  - spinbutton
+                                  - generic: 已禁用
+                                - generic: 非流式响应时每隔 N 秒发送空行以防止空闲超时，设置为 0 或留空表示禁用
+                      - generic:
+                        - generic:
+                          - generic:
+                            - generic: "06"
+                            - generic:
+                              - img
+                          - generic:
+                            - heading [level=2]: Payload 配置
+                            - paragraph: 默认值、原始 JSON 规则、覆盖规则与过滤规则
+                        - generic:
+                          - generic:
+                            - generic:
+                              - generic:
+                                - heading [level=3]: 默认规则
+                                - paragraph: 当请求中未指定参数时，使用这些默认值
+                              - generic:
+                                - generic: 暂无规则
+                                - generic:
+                                  - button:
+                                    - generic: 添加规则
+                            - generic:
+                              - generic:
+                                - heading [level=3]: 默认 Raw 规则
+                                - paragraph: "当请求中未指定参数时，按原始 JSON 片段写入这些值，例如 true、123、\"high\" 或 {\"type\":\"object\"}"
+                              - generic:
+                                - generic: 暂无规则
+                                - generic:
+                                  - button:
+                                    - generic: 添加规则
+                            - generic:
+                              - generic:
+                                - heading [level=3]: 覆盖规则
+                                - paragraph: 强制覆盖请求中的参数值
+                              - generic:
+                                - generic: 暂无规则
+                                - generic:
+                                  - button:
+                                    - generic: 添加规则
+                            - generic:
+                              - generic:
+                                - heading [level=3]: 覆盖 Raw 规则
+                                - paragraph: 始终按原始 JSON 片段覆盖参数值，适合 response_format、schema 等复杂字段
+                              - generic:
+                                - generic: 暂无规则
+                                - generic:
+                                  - button:
+                                    - generic: 添加规则
+                            - generic:
+                              - generic:
+                                - heading [level=3]: 过滤规则
+                                - paragraph: 通过 JSON Path 预过滤上游请求体，自动剔除不合规/冗余参数（Request Sanitization）
+                              - generic:
+                                - generic: 暂无规则
+                                - generic:
+                                  - button:
+                                    - generic: 添加规则
+        - generic [ref=e331]:
+          - generic [ref=e333]:
+            - generic [ref=e334]:
+              - heading "请求监控" [level=1] [ref=e335]
+              - generic [ref=e336]:
+                - button "导出数据" [ref=e337] [cursor=pointer]
+                - button "导入数据" [ref=e338] [cursor=pointer]
+                - button "模型价格" [ref=e339] [cursor=pointer]
+                - button "监控设置" [ref=e340] [cursor=pointer]
+            - paragraph [ref=e341]: 按账号和时间范围追踪调用规模、成功失败、Token 结构和花费，并提供接近请求日志的实时监控表。
+            - region "Usage statistics" [ref=e343]:
+              - generic [ref=e344]:
+                - strong [ref=e347]: 流量
+                - generic [ref=e348]:
+                  - generic [ref=e349]: 今日请求
+                  - strong [ref=e350]: "0"
+                - generic [ref=e351]:
+                  - generic [ref=e352]:
+                    - generic [ref=e353]: 总请求
+                    - strong [ref=e354]: "0"
+                  - generic [ref=e355]:
+                    - generic [ref=e356]: 总成功率
+                    - strong [ref=e357]: 100.0%
+              - generic [ref=e358]:
+                - strong [ref=e361]: Token
+                - generic [ref=e362]:
+                  - generic [ref=e363]: 今日 Token
+                  - strong [ref=e364]: "0"
+                - generic [ref=e365]:
+                  - generic [ref=e366]:
+                    - generic [ref=e367]: 总 Token
+                    - strong [ref=e368]: "0"
+                  - generic [ref=e369]:
+                    - generic [ref=e370]: 输入 / 输出 / 推理
+                    - strong [ref=e371]: 0 / 0 / 0
+              - generic [ref=e372]:
+                - strong [ref=e375]: 缓存
+                - generic [ref=e376]:
+                  - generic [ref=e377]: 今日缓存命中率
+                  - strong [ref=e378]: 0.0%
+                - generic [ref=e379]:
+                  - generic [ref=e380]:
+                    - generic [ref=e381]: 今日缓存 Token
+                    - strong [ref=e382]: "0"
+                  - generic [ref=e383]:
+                    - generic [ref=e384]: 总缓存命中
+                    - strong [ref=e385]: 0 / 0.0%
+              - generic [ref=e386]:
+                - strong [ref=e389]: 计费
+                - generic [ref=e390]:
+                  - generic [ref=e391]: 今日花费
+                  - strong [ref=e392]: "--"
+                - generic [ref=e393]:
+                  - generic [ref=e394]:
+                    - generic [ref=e395]: 较昨日
+                    - strong [ref=e396]: "--"
+                  - generic [ref=e397]:
+                    - generic [ref=e398]: 总花费
+                    - strong [ref=e399]: "--"
+          - generic [ref=e400]:
+            - generic [ref=e401]:
+              - generic [ref=e402]:
+                - heading "使用统计" [level=2] [ref=e403]
+                - paragraph [ref=e404]: 基于选定时间范围内 0 条请求日志自动聚合。
+              - generic [ref=e405]:
+                - generic [ref=e406]:
+                  - button "今天" [ref=e407] [cursor=pointer]
+                  - button "7 天" [ref=e408] [cursor=pointer]
+                  - button "14 天" [ref=e409] [cursor=pointer]
+                  - button "30 天" [ref=e410] [cursor=pointer]
+                  - button "全部" [ref=e411] [cursor=pointer]
+                - button "按 API 密钥筛选使用趋势" [ref=e413] [cursor=pointer]:
+                  - generic [ref=e414]: 全部 API 密钥
+                  - img [ref=e416]
+                - button "隐藏分析" [ref=e418] [cursor=pointer]
+            - generic [ref=e419]:
+              - generic [ref=e420]:
+                - generic [ref=e421]:
+                  - generic [ref=e422]:
+                    - heading "使用趋势" [level=3] [ref=e423]
+                    - paragraph [ref=e424]: 展示选定时间范围内的请求数、Token 和花费趋势。
+                  - generic [ref=e425]:
+                    - generic [ref=e426]:
+                      - generic [ref=e427]: RPM
+                      - strong [ref=e428]: "0.00"
+                    - generic [ref=e429]:
+                      - generic [ref=e430]: TPM
+                      - strong [ref=e431]: "0"
+                    - generic [ref=e432]:
+                      - generic [ref=e433]: 错误率
+                      - strong [ref=e434]: 0.0%
+                - generic [ref=e435]:
+                  - generic [ref=e436]:
+                    - generic [ref=e437]:
+                      - generic [ref=e438]: 总请求
+                      - strong [ref=e439]: "0"
+                    - generic [ref=e440]:
+                      - generic [ref=e441]: 总 Token
+                      - strong [ref=e442]: "0"
+                    - generic [ref=e443]:
+                      - generic [ref=e444]: 峰值时段
+                      - strong [ref=e445]: 00:00
+                  - img "使用趋势图表" [ref=e446]:
+                    - generic [ref=e447]:
+                      - generic [ref=e448]: "0"
+                      - generic [ref=e449]: "0"
+                    - generic [ref=e450]:
+                      - generic [ref=e451]: "3"
+                      - generic [ref=e452]: "250"
+                    - generic [ref=e453]:
+                      - generic [ref=e454]: "5"
+                      - generic [ref=e455]: "500"
+                    - generic [ref=e456]:
+                      - generic [ref=e457]: "8"
+                      - generic [ref=e458]: "750"
+                    - generic [ref=e459]:
+                      - generic [ref=e460]: "10"
+                      - generic [ref=e461]: 1.0K
+                    - generic [ref=e463]: 00:00
+                    - generic [ref=e465]: 03:00
+                    - generic [ref=e467]: 06:00
+                    - generic [ref=e469]: 09:00
+                    - generic [ref=e471]: 12:00
+                    - generic [ref=e473]: 15:00
+                    - generic [ref=e475]: 18:00
+                    - generic [ref=e477]: 19:00
+                  - generic [ref=e518]:
+                    - generic [ref=e519]: Token
+                    - generic [ref=e520]: 请求
+              - generic [ref=e521]:
+                - generic [ref=e522]:
+                  - generic [ref=e523]:
+                    - heading "密钥排行" [level=3] [ref=e524]
+                    - paragraph [ref=e525]: 按 API 密钥统计调用量。
+                  - group "排行指标" [ref=e526]:
+                    - button "请求" [ref=e527] [cursor=pointer]
+                    - button "Token" [ref=e528] [cursor=pointer]
+                    - button "花费" [disabled] [ref=e529]
+                - generic [ref=e531]: 当前筛选范围内暂无可展示的调用数据。
+            - generic [ref=e532]:
+              - generic [ref=e533]:
+                - generic [ref=e534]:
+                  - generic [ref=e535]:
+                    - heading "模型统计" [level=3] [ref=e536]
+                    - paragraph [ref=e537]: 按当前保留日志聚合请求、Token 与金额。
+                  - group "排行指标" [ref=e538]:
+                    - button "请求" [ref=e539] [cursor=pointer]
+                    - button "Token" [ref=e540] [cursor=pointer]
+                    - button "花费" [disabled] [ref=e541]
+                - generic [ref=e542]: 当前筛选范围内暂无可展示的调用数据。
+              - generic [ref=e543]:
+                - generic [ref=e544]:
+                  - generic [ref=e545]:
+                    - heading "Token 统计" [level=3] [ref=e546]
+                    - paragraph [ref=e547]: 按时间段拆分输入、输出、推理、缓存 Token 和预估 Token 花费。
+                  - generic [ref=e548]:
+                    - generic [ref=e549]: Token 花费
+                    - strong [ref=e550]: "--"
+                - generic [ref=e551]: 当前筛选范围内暂无可展示的调用数据。
+          - generic [ref=e552]:
+            - generic [ref=e553]:
+              - generic [ref=e554]:
+                - heading "账号统计" [level=2] [ref=e555]
+                - paragraph [ref=e556]: 在选定时间范围内对比账号/API 密钥健康度、用量、模型分布和额度状态。
+              - generic [ref=e557]:
+                - generic [ref=e558]:
+                  - button "今天" [ref=e559] [cursor=pointer]
+                  - button "7 天" [ref=e560] [cursor=pointer]
+                  - button "14 天" [ref=e561] [cursor=pointer]
+                  - button "30 天" [ref=e562] [cursor=pointer]
+                  - button "全部" [ref=e563] [cursor=pointer]
+                - button "隐藏分析" [ref=e564] [cursor=pointer]
+            - generic [ref=e565]:
+              - generic [ref=e566]:
+                - generic [ref=e567]:
+                  - generic [ref=e569]:
+                    - textbox "搜索账号、API 密钥或模型" [ref=e570]
+                    - img [ref=e572]
+                  - combobox "健康状态" [ref=e575] [cursor=pointer]:
+                    - option "全部状态" [selected]
+                    - option "健康"
+                    - option "预警 / 风险"
+                    - option "高风险"
+                - group "账号统计排序" [ref=e576]:
+                  - button "最近请求" [ref=e577] [cursor=pointer]
+                  - button "请求" [ref=e578] [cursor=pointer]
+                  - button "Token" [ref=e579] [cursor=pointer]
+                  - button "花费" [disabled] [ref=e580]
+              - generic [ref=e581]: 当前筛选范围内暂无可展示的调用数据。

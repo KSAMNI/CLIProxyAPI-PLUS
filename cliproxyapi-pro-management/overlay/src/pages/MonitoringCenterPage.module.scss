@@ -424,6 +424,8 @@
   display: grid;
   gap: 14px;
   min-width: 0;
+  height: min(827px, calc((100vh - 260px) * 1.33));
+  min-height: 560px;
   padding: 18px;
   border: 1px solid var(--monitor-line);
   border-radius: 12px;
@@ -469,19 +471,20 @@
 .savedPricesActions {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: 2px;
 }
 
 .inlineMetrics span {
   display: inline-flex;
   align-items: center;
-  min-height: 30px;
-  padding: 0 10px;
+  min-height: 12px;
+  padding: 0 4px;
   border-radius: 999px;
   border: 1px solid var(--monitor-line);
   background: var(--monitor-surface-elevated);
   color: var(--monitor-muted);
-  font-size: 12px;
+  font-size: 10px;
+  line-height: 1;
 }
 
 .errorBox,
@@ -798,6 +801,11 @@
 
 .tokenDistributionCard {
   overflow: visible;
+}
+
+.tokenDistributionCard .tokenStatCardList,
+.tokenDistributionCard .emptyBlockSmall {
+  height: 100%;
 }
 
 .usageTrendLineCard,

@@ -845,8 +845,8 @@
   },
   "zh-CN.json": {
     "nav": {
-      "monitoring_center": "请求监控",
-      "realtime_logs": "实时日志"
+      "monitoring_center": "数据统计",
+      "realtime_logs": "请求监控"
     },
     "monitoring": {
       "eyebrow": "Runtime Overview",
@@ -1094,7 +1094,7 @@
       "ranking_metric_tokens": "Token",
       "ranking_summary_calls": "总请求数",
       "ranking_summary_cost": "总花费",
-      "ranking_summary_tokens": "总 Token",
+      "ranking_summary_tokens": "总和",
       "request_count": "请求数",
       "search_account": "搜索账号、API 密钥或模型",
       "share_by_metric": "{{metric}}占比",
@@ -1113,7 +1113,7 @@
       "token_metric_input": "输入",
       "token_metric_output": "输出",
       "token_metric_reasoning": "推理",
-      "token_metric_total": "总 Token",
+      "token_metric_total": "总和",
       "token_stats_desc": "按时间段拆分输入、输出、推理、缓存 Token 和预估 Token 花费。",
       "token_stats_title": "Token 统计",
       "token_usage": "Token 用量",
