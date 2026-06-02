@@ -196,7 +196,7 @@ The workflow:
 9. Updates the management version mapping and upstream release notes in the release notes.
 10. Deletes old workflow runs.
 
-This keeps `remote-management.panel-github-repository=https://github.com/ssfun/CLIProxyAPI-Pro` able to fetch the latest `management.html` through GitHub `/releases/latest`.
+This keeps `remote-management.panel-github-repository=https://github.com/yancj9ya/CLIProxyAPI-PLUS` able to fetch the latest `management.html` through GitHub `/releases/latest`.
 
 ## Backend expectations
 

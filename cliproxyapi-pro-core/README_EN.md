@@ -31,7 +31,7 @@ The image declares `/CLIProxyAPI/usage` as a Docker volume so usage data, quota 
 At service startup the patch layer forces the upstream config values required by Pro:
 
 - `usage-statistics-enabled: true`
-- `remote-management.panel-github-repository: https://github.com/ssfun/CLIProxyAPI-Pro`
+- `remote-management.panel-github-repository: https://github.com/yancj9ya/CLIProxyAPI-PLUS`
 
 The loaded in-memory config is always corrected. `config.yaml` is updated only when the loaded values differ, preserving normal startup behavior when the file is already correct.
 
@@ -143,7 +143,7 @@ The patch layer also changes upstream API behavior:
 The patch layer changes upstream's default remote management panel repository to:
 
 ```text
-https://github.com/ssfun/CLIProxyAPI-Pro
+https://github.com/yancj9ya/CLIProxyAPI-PLUS
 ```
 
 This affects the built-in default config, `config.example.yaml`, and the management asset updater's default latest-release API URL.

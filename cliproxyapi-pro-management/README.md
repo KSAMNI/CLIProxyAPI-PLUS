@@ -196,7 +196,7 @@ Workflow：
 9. 更新 release notes 中的 management 版本映射和 upstream release notes。
 10. 清理旧 workflow runs。
 
-这样 `remote-management.panel-github-repository=https://github.com/ssfun/CLIProxyAPI-Pro` 始终可以通过 GitHub `/releases/latest` 获取最新 `management.html`。
+这样 `remote-management.panel-github-repository=https://github.com/yancj9ya/CLIProxyAPI-PLUS` 始终可以通过 GitHub `/releases/latest` 获取最新 `management.html`。
 
 ## 后端依赖
 

@@ -31,7 +31,7 @@ internal/embeddedusage
 服务启动时，补丁层会强制 Pro 依赖的 upstream 配置值：
 
 - `usage-statistics-enabled: true`
-- `remote-management.panel-github-repository: https://github.com/ssfun/CLIProxyAPI-Pro`
+- `remote-management.panel-github-repository: https://github.com/yancj9ya/CLIProxyAPI-PLUS`
 
 加载后的内存配置始终会被修正。只有当加载到的值不一致时才会更新 `config.yaml`，文件已经正确时不会重复落盘。
 
@@ -143,7 +143,7 @@ internal/embeddedusage
 补丁层会将 upstream 的远程管理面板默认仓库改为：
 
 ```text
-https://github.com/ssfun/CLIProxyAPI-Pro
+https://github.com/yancj9ya/CLIProxyAPI-PLUS
 ```
 
 该修改会同时影响内置默认配置、`config.example.yaml`，以及 management asset updater 的默认 latest-release API 地址。
