@@ -109,7 +109,7 @@ Account inspection is executed by the backend only. The management UI configures
 
 During backend inspection, eligible auth records are refreshed before quota/account probing when they are already in their normal refresh window. The inspection refresh path skips API-key accounts, accounts not yet due for refresh, and accounts still blocked by `NextRefreshAfter`; disabled accounts are allowed to refresh. If refresh succeeds, probing uses the refreshed auth. If refresh fails, the account is kept and probing is skipped for that account.
 
-The backend forces `usage-statistics-enabled=true` and `remote-management.panel-github-repository=https://github.com/ssfun/CLIProxyAPI-Pro` at startup, then writes those values back to `config.yaml` only when the loaded config differs.
+The backend forces `usage-statistics-enabled=true` and `remote-management.panel-github-repository=https://github.com/yancj9ya/CLIProxyAPI-PLUS` at startup, then writes those values back to `config.yaml` only when the loaded config differs.
 
 If the management UI is used with the unmodified upstream backend, request monitoring, SQLite persistence, model prices, and backend account inspection will show errors or empty data.
 
@@ -190,7 +190,7 @@ Overview:
 7. Uploads and clobbers `management.html` on the current latest release.
 8. Updates the management version mapping and release notes section.
 
-This keeps `remote-management.panel-github-repository=https://github.com/ssfun/CLIProxyAPI-Pro` compatible with GitHub `/releases/latest`, because the latest release always carries `management.html`.
+This keeps `remote-management.panel-github-repository=https://github.com/yancj9ya/CLIProxyAPI-PLUS` compatible with GitHub `/releases/latest`, because the latest release always carries `management.html`.
 
 ## Local build
 

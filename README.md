@@ -134,7 +134,7 @@ CLIProxyAPI Pro 是对两个 upstream 项目的最小化定制层集合：
 
 后端巡检时，如果认证记录本来已经进入正常刷新窗口，会在配额/账号探测前尝试刷新 token。巡检刷新路径会跳过 API key 账号、未到刷新窗口的账号，以及仍受 `NextRefreshAfter` 限制的账号；disabled 账号允许刷新。刷新成功后使用刷新后的 auth 继续探测；刷新失败时保留该账号，并跳过该账号本次探测。
 
-后端启动时会强制 `usage-statistics-enabled=true` 和 `remote-management.panel-github-repository=https://github.com/ssfun/CLIProxyAPI-Pro`，并且只在加载到的配置不一致时同步回写 `config.yaml`。
+后端启动时会强制 `usage-statistics-enabled=true` 和 `remote-management.panel-github-repository=https://github.com/yancj9ya/CLIProxyAPI-PLUS`，并且只在加载到的配置不一致时同步回写 `config.yaml`。
 
 如果只使用 upstream 后端，管理端中的请求监控、SQLite 持久化、模型价格和后端账号巡检等功能会显示错误或空数据。
 
@@ -215,7 +215,7 @@ Workflow：
 7. 上传覆盖当前 latest release 中的 `management.html`。
 8. 更新 release notes 中的 management 版本映射和 release notes。
 
-这样 `remote-management.panel-github-repository=https://github.com/ssfun/CLIProxyAPI-Pro` 仍然可以通过 GitHub `/releases/latest` 获取到最新 `management.html`。
+这样 `remote-management.panel-github-repository=https://github.com/yancj9ya/CLIProxyAPI-PLUS` 仍然可以通过 GitHub `/releases/latest` 获取到最新 `management.html`。
 
 ## 本地构建
 
