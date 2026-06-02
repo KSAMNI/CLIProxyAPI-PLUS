@@ -82,6 +82,8 @@ jobs:
           should_release="false"
           if [ "${GITHUB_EVENT_NAME}" = "workflow_dispatch" ]; then
             should_release="true"
+          elif [ "${GITHUB_EVENT_NAME}" = "push" ]; then
+            should_release="true"
           elif [ "${has_management_asset}" != "true" ]; then
             should_release="true"
           elif version_gt "${upstream_base_version}" "${current_base_version}"; then
