@@ -5,8 +5,8 @@ import shutil
 from pathlib import Path
 
 ROOT = Path(os.environ.get('SRC_ROOT', '/src/CLIProxyAPI'))
-PRO_PANEL_REPOSITORY = 'https://github.com/ssfun/CLIProxyAPI-Pro'
-PRO_PANEL_RELEASE_API = 'https://api.github.com/repos/ssfun/CLIProxyAPI-Pro/releases/latest'
+PRO_PANEL_REPOSITORY = 'https://github.com/yancj9ya/CLIProxyAPI-PLUS'
+PRO_PANEL_RELEASE_API = 'https://api.github.com/repos/yancj9ya/CLIProxyAPI-PLUS/releases/latest'
 
 
 _writes = {}
