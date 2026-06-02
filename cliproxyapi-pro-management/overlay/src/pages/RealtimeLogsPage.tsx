@@ -11,13 +11,14 @@ import {
   type MonitoringTimeRange,
 } from '@/features/monitoring/hooks/useMonitoringData';
 import { useUsageData } from '@/features/monitoring/hooks/useUsageData';
-import { useConfigStore } from '@/stores';
+import { useConfigStore, useNotificationStore } from '@/stores';
 import { maskSensitiveText } from '@/utils/format';
 import { formatCompactNumber, formatDurationMs, formatUsd } from '@/utils/usage';
 import styles from './MonitoringCenterPage.module.scss';
 
 const REALTIME_LOG_ROW_LIMIT = 300;
 const AUTO_REFRESH_OPTIONS = [
+  { value: '0', labelKey: 'monitoring.auto_refresh_off' },
   { value: '1000', labelKey: 'monitoring.auto_refresh_1s' },
   { value: '3000', labelKey: 'monitoring.auto_refresh_3s' },
   { value: '5000', labelKey: 'monitoring.auto_refresh_5s' },
@@ -127,6 +128,7 @@ function RecentPattern({
 export function RealtimeLogsPage() {
   const { t, i18n } = useTranslation();
   const config = useConfigStore((state) => state.config);
+  const showNotification = useNotificationStore((state) => state.showNotification);
   const [timeRange, setTimeRange] = useState<MonitoringTimeRange>('today');
   const [searchInput, setSearchInput] = useState('');
   const [selectedProvider, setSelectedProvider] = useState('all');
@@ -225,8 +227,17 @@ export function RealtimeLogsPage() {
     setSelectedStatus('all');
   };
 
+  const handleManualRefresh = async () => {
+    try {
+      const refreshed = await refreshUsage();
+      showNotification(t(refreshed ? 'monitoring.refresh_success' : 'monitoring.refresh_failed'), refreshed ? 'success' : 'error');
+    } catch (error) {
+      showNotification(error instanceof Error ? error.message : t('monitoring.refresh_failed'), 'error');
+    }
+  };
+
   return (
-    <div className={styles.page}>
+    <div className={`${styles.page} ${styles.realtimeLogsPage}`}>
       <section className={styles.masthead}>
         <div className={styles.mastheadGlow} aria-hidden="true" />
         <div className={styles.mastheadCopy}>
@@ -238,9 +249,15 @@ export function RealtimeLogsPage() {
 
       <section className={styles.usageTrendSection}>
         <div className={styles.usageTrendHeader}>
-          <div className={styles.usageTrendCopy} />
+          <div className={styles.inlineMetrics}>
+            <span>{`${t('monitoring.log_rows')}: ${realtimeLogRows.length}`}</span>
+            {realtimeLogRows.length > visibleRealtimeLogRows.length ? (
+              <span>{`${t('monitoring.visible_log_rows')}: ${visibleRealtimeLogRows.length}`}</span>
+            ) : null}
+            <span>{`${t('monitoring.recent_failures')}: ${scopedFailureCount}`}</span>
+          </div>
           <div className={styles.usageTrendActions}>
-            <button type="button" className={`${styles.clearButton} ${styles.usageTrendHideButton}`} onClick={() => void refreshUsage()}>
+            <button type="button" className={`${styles.clearButton} ${styles.usageTrendHideButton}`} onClick={() => void handleManualRefresh()}>
               {t('monitoring.refresh')}
             </button>
             <Select
@@ -286,14 +303,6 @@ export function RealtimeLogsPage() {
           </div>
 
           {combinedError ? <div className={styles.errorBox}>{combinedError}</div> : null}
-
-          <div className={styles.inlineMetrics}>
-            <span>{`${t('monitoring.log_rows')}: ${realtimeLogRows.length}`}</span>
-            {realtimeLogRows.length > visibleRealtimeLogRows.length ? (
-              <span>{`${t('monitoring.visible_log_rows')}: ${visibleRealtimeLogRows.length}`}</span>
-            ) : null}
-            <span>{`${t('monitoring.recent_failures')}: ${scopedFailureCount}`}</span>
-          </div>
 
           <div className={`${styles.tableWrapper} ${styles.tableScrollWrapper} ${styles.realtimeTableWrapper}`}>
             <table className={`${styles.table} ${styles.realtimeTable}`}>

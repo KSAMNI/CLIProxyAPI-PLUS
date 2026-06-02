@@ -27,7 +27,7 @@ export interface UseUsageDataReturn {
   lastRefreshedAt: Date | null;
   modelPrices: Record<string, ModelPrice>;
   setModelPrices: (prices: Record<string, ModelPrice>) => void;
-  refreshUsage: () => Promise<void>;
+  refreshUsage: () => Promise<boolean>;
 }
 
 const USAGE_STREAM_FLUSH_INTERVAL_MS = 250;
@@ -140,13 +140,15 @@ const loadUsageSnapshot = async ({
 
   try {
     const payload = await apiClient.get<UsagePayload>('/usage');
-    if (requestIdRef.current !== requestId) return;
+    if (requestIdRef.current !== requestId) return false;
     latestIdRef.current = toNumber(payload?.latest_id);
     setUsage(payload ?? null);
     setLastRefreshedAt(new Date());
+    return true;
   } catch (err) {
-    if (requestIdRef.current !== requestId) return;
+    if (requestIdRef.current !== requestId) return false;
     setError(err instanceof Error ? err.message : String(err));
+    return false;
   } finally {
     if (requestIdRef.current === requestId) {
       setLoading(false);
@@ -164,21 +166,22 @@ const loadUsageIncrementalSnapshot = async ({
   latestIdRef: MutableRef<number>;
   incrementalLoadingRef: MutableRef<boolean>;
   incrementalPendingRef: MutableRef<boolean>;
-  loadUsage: () => Promise<void>;
+  loadUsage: () => Promise<boolean>;
   applyUsagePayload: (payload: UsagePayload | null, immediate?: boolean) => void;
 }) => {
   if (incrementalLoadingRef.current) {
     incrementalPendingRef.current = true;
-    return;
+    return true;
   }
 
+  let succeeded = true;
   incrementalLoadingRef.current = true;
   try {
     do {
       incrementalPendingRef.current = false;
       const afterId = latestIdRef.current;
       if (afterId <= 0) {
-        await loadUsage();
+        succeeded = (await loadUsage()) && succeeded;
         continue;
       }
 
@@ -186,9 +189,10 @@ const loadUsageIncrementalSnapshot = async ({
         const payload = await apiClient.get<UsagePayload>(`/usage/events?after_id=${afterId}&limit=5000`);
         applyUsagePayload(payload ?? null, true);
       } catch {
-        await loadUsage();
+        succeeded = (await loadUsage()) && succeeded;
       }
     } while (incrementalPendingRef.current);
+    return succeeded;
   } finally {
     incrementalLoadingRef.current = false;
   }
@@ -207,7 +211,7 @@ const connectUsageStream = async ({
   signal: AbortSignal;
   latestIdRef: MutableRef<number>;
   applyUsagePayload: (payload: UsagePayload | null, immediate?: boolean) => void;
-  loadUsageIncremental: () => Promise<void>;
+  loadUsageIncremental: () => Promise<boolean>;
 }) => {
   const decoder = new TextDecoder();
   let buffer = '';
