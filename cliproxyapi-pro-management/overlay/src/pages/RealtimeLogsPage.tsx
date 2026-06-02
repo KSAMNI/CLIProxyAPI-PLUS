@@ -138,7 +138,7 @@ export function RealtimeLogsPage() {
   const [autoRefreshMs, setAutoRefreshMs] = useState(10000);
   const deferredSearch = useDeferredValue(searchInput);
 
-  const { usage, error: usageError, modelPrices, refreshUsage } = useUsageData();
+  const { usage, error: usageError, modelPrices, refreshUsage } = useUsageData({ recentLimit: REALTIME_LOG_ROW_LIMIT });
   const { error: monitoringError, filteredRows } = useMonitoringData({
     usage,
     config,

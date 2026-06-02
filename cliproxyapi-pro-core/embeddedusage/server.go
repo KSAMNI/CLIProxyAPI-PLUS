@@ -52,6 +52,9 @@ func RegisterGinRoutes(group *gin.RouterGroup) {
 		group.GET("/events", func(c *gin.Context) {
 			c.JSON(http.StatusServiceUnavailable, gin.H{"error": "usage service is not available"})
 		})
+		group.GET("/recent-events", func(c *gin.Context) {
+			c.JSON(http.StatusServiceUnavailable, gin.H{"error": "usage service is not available"})
+		})
 		group.GET("/stream", func(c *gin.Context) {
 			c.JSON(http.StatusServiceUnavailable, gin.H{"error": "usage service is not available"})
 		})
@@ -83,6 +86,7 @@ func RegisterGinRoutes(group *gin.RouterGroup) {
 
 func (s *Server) RegisterGinRoutes(group *gin.RouterGroup) {
 	group.GET("", s.handleUsage)
+	group.GET("/recent-events", s.handleRecentUsageEvents)
 	group.GET("/export", s.handleUsageExport)
 	group.POST("/import", s.handleUsageImport)
 	group.GET("/status", s.handleStatus)
@@ -122,6 +126,22 @@ func parseQueryInt(c *gin.Context, key string, fallback int) int {
 }
 func (s *Server) handleUsage(c *gin.Context) {
 	events, err := s.store.RecentEvents(c.Request.Context(), s.cfg.QueryLimit)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, internalusage.BuildPayload(events))
+}
+
+func (s *Server) handleRecentUsageEvents(c *gin.Context) {
+	limit := parseQueryInt(c, "limit", 300)
+	if limit <= 0 {
+		limit = 300
+	}
+	if limit > 1000 {
+		limit = 1000
+	}
+	events, err := s.store.RecentEvents(c.Request.Context(), limit)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
