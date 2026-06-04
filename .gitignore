@@ -1,5 +1,7 @@
 # Local Claude/OMC runtime state
 .omc/
+.omo/
+.playwright-mcp/
 .claude/worktrees/
 .claude/settings.local.json
 
