@@ -469,6 +469,26 @@ def patch_provider_disabled_sort(target: Path) -> None:
     )
 
 
+def patch_provider_base_url_link(target: Path) -> None:
+    path = target / 'src/features/providers/sheets/ResourceDetailView.tsx'
+    replace_once(
+        path,
+        "import { useTranslation } from 'react-i18next';\n",
+        "import type { ReactNode } from 'react';\nimport { useTranslation } from 'react-i18next';\n",
+    )
+    insert_once(
+        path,
+        "interface ResourceDetailViewProps {\n",
+        "const buildProviderWebsiteUrl = (baseUrl?: string | null) => {\n  const trimmed = baseUrl?.trim();\n  if (!trimmed) return '';\n\n  try {\n    const url = new URL(trimmed);\n    if (url.pathname.replace(/\\/+$/, '') === '/v1') {\n      return url.origin;\n    }\n    return url.toString();\n  } catch {\n    return '';\n  }\n};\n\ninterface ResourceDetailViewProps {\n",
+        "buildProviderWebsiteUrl",
+    )
+    replace_once(
+        path,
+        "  const primary: Array<[string, string]> = [\n    ['identifier', resource.identifier],\n    ['baseUrl', resource.baseUrl ?? t('providersPage.status.notSet')],\n    ['proxyUrl', resource.proxyUrl ?? t('providersPage.status.notSet')],\n    ['prefix', resource.prefix ?? t('providersPage.status.none')],\n    ['models', String(resource.modelCount)],\n    ['headers', String(resource.headerCount)],\n  ];\n",
+        "  const providerWebsiteUrl = buildProviderWebsiteUrl(resource.baseUrl);\n  const baseUrlValue = resource.baseUrl?.trim() || t('providersPage.status.notSet');\n  const primary: Array<[string, ReactNode]> = [\n    ['identifier', resource.identifier],\n    [\n      'baseUrl',\n      providerWebsiteUrl ? (\n        <a href={providerWebsiteUrl} target=\"_blank\" rel=\"noreferrer\">\n          {baseUrlValue}\n        </a>\n      ) : (\n        baseUrlValue\n      ),\n    ],\n    ['proxyUrl', resource.proxyUrl ?? t('providersPage.status.notSet')],\n    ['prefix', resource.prefix ?? t('providersPage.status.none')],\n    ['models', String(resource.modelCount)],\n    ['headers', String(resource.headerCount)],\n  ];\n",
+    )
+
+
 def patch_provider_detail_models(target: Path) -> None:
     path = target / 'src/features/providers/sheets/ResourceDetailView.tsx'
     replace_once(
@@ -531,6 +551,7 @@ def main() -> None:
     patch_supporting_api_and_types(target)
     patch_provider_priority_badge(target)
     patch_provider_disabled_sort(target)
+    patch_provider_base_url_link(target)
     patch_provider_detail_models(target)
     patch_locales(target)
     flush_writes()
