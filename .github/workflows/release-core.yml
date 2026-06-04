@@ -129,6 +129,12 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Set GHCR image name
+        id: image-name
+        run: |
+          image="ghcr.io/${GITHUB_REPOSITORY_OWNER}/cliproxyapi-pro"
+          echo "image=${image,,}" >> "${GITHUB_OUTPUT}"
+
       - name: Build and push Docker image
         uses: docker/build-push-action@v6
         with:
@@ -139,8 +145,8 @@ jobs:
             CLIPROXY_BUILD_VERSION=${{ needs.check-version.outputs.release_tag }}
           push: true
           tags: |
-            ghcr.io/${{ github.repository_owner }}/cliproxyapi-pro:latest
-            ghcr.io/${{ github.repository_owner }}/cliproxyapi-pro:${{ needs.check-version.outputs.release_tag }}
+            ${{ steps.image-name.outputs.image }}:latest
+            ${{ steps.image-name.outputs.image }}:${{ needs.check-version.outputs.release_tag }}
 
   build-core-binaries:
     needs: check-version

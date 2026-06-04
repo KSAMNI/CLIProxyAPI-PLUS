@@ -87,21 +87,21 @@
       "type": "file"
     },
     {
+      "path": "",
+      "accessCount": 30,
+      "lastAccessed": 1780257725736,
+      "type": "directory"
+    },
+    {
       "path": "cliproxyapi-pro-management\\apply_customizations.py",
       "accessCount": 28,
       "lastAccessed": 1780253619144,
       "type": "file"
     },
     {
-      "path": "",
-      "accessCount": 27,
-      "lastAccessed": 1780251401041,
-      "type": "directory"
-    },
-    {
       "path": "cliproxyapi-pro-management",
-      "accessCount": 25,
-      "lastAccessed": 1780252103511,
+      "accessCount": 26,
+      "lastAccessed": 1780257226705,
       "type": "directory"
     },
     {
@@ -213,16 +213,22 @@
       "type": "directory"
     },
     {
+      "path": "cliproxyapi-pro-core\\README.md",
+      "accessCount": 2,
+      "lastAccessed": 1780257816844,
+      "type": "file"
+    },
+    {
+      "path": "C:\\Users\\yancj\\.claude\\plans\\abundant-crunching-garden.md",
+      "accessCount": 2,
+      "lastAccessed": 1780257941440,
+      "type": "file"
+    },
+    {
       "path": "C:\\Users\\yancj\\.claude\\plugins\\cache\\omc\\oh-my-claudecode\\4.14.4",
       "accessCount": 1,
       "lastAccessed": 1780244706051,
       "type": "directory"
-    },
-    {
-      "path": "cliproxyapi-pro-core\\README.md",
-      "accessCount": 1,
-      "lastAccessed": 1780244916990,
-      "type": "file"
     },
     {
       "path": "README.md",
