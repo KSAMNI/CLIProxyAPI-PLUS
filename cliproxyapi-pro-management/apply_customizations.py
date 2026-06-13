@@ -215,7 +215,7 @@ def patch_quota_configs(target: Path) -> None:
     for old, new in [
         ("    extraUsage: data.extraUsage,\n    planType: data.planType,\n  }),", "    extraUsage: data.extraUsage,\n    planType: data.planType,\n    cachedAt: Date.now(),\n  }),"),
         ("  buildSuccessState: (groups) => ({ status: 'success', groups }),", "  buildSuccessState: (groups) => ({ status: 'success', groups, cachedAt: Date.now() }),"),
-        ("    windows: data.windows,\n    planType: data.planType,\n  }),", "    windows: data.windows,\n    planType: data.planType,\n    cachedAt: Date.now(),\n  }),"),
+        ("    planType: data.planType,\n    subscriptionActiveUntil: data.subscriptionActiveUntil,\n    rateLimitResetCreditsAvailableCount: data.rateLimitResetCreditsAvailableCount,\n  }),", "    planType: data.planType,\n    subscriptionActiveUntil: data.subscriptionActiveUntil,\n    rateLimitResetCreditsAvailableCount: data.rateLimitResetCreditsAvailableCount,\n    cachedAt: Date.now(),\n  }),"),
         ("      creditBalance: supplementarySnapshot.creditBalance ?? data.creditBalance,\n    };", "      creditBalance: supplementarySnapshot.creditBalance ?? data.creditBalance,\n      cachedAt: Date.now(),\n    };"),
         ("  buildSuccessState: (rows) => ({ status: 'success', rows }),", "  buildSuccessState: (rows) => ({ status: 'success', rows, cachedAt: Date.now() }),"),
     ]:
