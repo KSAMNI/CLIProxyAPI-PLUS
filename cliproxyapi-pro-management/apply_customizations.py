@@ -422,11 +422,6 @@ def patch_provider_disabled_sort(target: Path) -> None:
         "import { useCallback, useMemo, useRef, useState } from 'react';\n",
         "import { useCallback, useEffect, useMemo, useRef, useState } from 'react';\n",
     )
-    replace_once(
-        path,
-        "import type { OpenAIProviderConfig } from '@/types';\n",
-        "import type { GeminiKeyConfig, OpenAIProviderConfig, ProviderKeyConfig } from '@/types';\n",
-    )
     # Updated for upstream v1.16.1+ which added ProviderSortBy and SortDir
     replace_once(
         path,
