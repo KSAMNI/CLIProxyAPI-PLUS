@@ -145,3 +145,44 @@ export function resolveGeminiCliProjectId(file: AuthFileItem): string | null {
 
   return null;
 }
+
+export function resolveCodexSubscriptionActiveUntil(file: AuthFileItem): string | null {
+  const metadata =
+    file && typeof file.metadata === 'object' && file.metadata !== null
+      ? (file.metadata as Record<string, unknown>)
+      : null;
+  const attributes =
+    file && typeof file.attributes === 'object' && file.attributes !== null
+      ? (file.attributes as Record<string, unknown>)
+      : null;
+  const idToken =
+    file && typeof file.id_token === 'object' && file.id_token !== null
+      ? (file.id_token as Record<string, unknown>)
+      : null;
+  const metadataIdToken =
+    metadata && typeof metadata.id_token === 'object' && metadata.id_token !== null
+      ? (metadata.id_token as Record<string, unknown>)
+      : null;
+
+  const candidates = [
+    file.subscription_active_until,
+    file.subscriptionActiveUntil,
+    file['subscription_active_until'],
+    file['subscriptionActiveUntil'],
+    idToken?.subscription_active_until,
+    idToken?.subscriptionActiveUntil,
+    metadata?.subscription_active_until,
+    metadata?.subscriptionActiveUntil,
+    metadataIdToken?.subscription_active_until,
+    metadataIdToken?.subscriptionActiveUntil,
+    attributes?.subscription_active_until,
+    attributes?.subscriptionActiveUntil,
+  ];
+
+  for (const candidate of candidates) {
+    const value = normalizeStringValue(candidate);
+    if (value) return value;
+  }
+
+  return null;
+}
