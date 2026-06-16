@@ -368,23 +368,14 @@ def patch_supporting_api_and_types(target: Path) -> None:
 
 
 def patch_provider_priority_badge(target: Path) -> None:
-    path = target / 'src/features/providers/components/ProviderResourceTable.tsx'
-    replace_once(
-        path,
-        "import type { OpenAIProviderConfig } from '@/types';\n",
-        "import type { GeminiKeyConfig, OpenAIProviderConfig, ProviderKeyConfig } from '@/types';\n",
-    )
-    insert_once(
-        path,
-        "  const renderPrimary = (r: ProviderResource) => {\n",
-        "  const renderPriorityBadge = (r: ProviderResource) => {\n    if (r.brand === 'ampcode') return null;\n    const priority =\n      r.brand === 'gemini'\n        ? (r.raw as GeminiKeyConfig).priority\n        : (r.raw as OpenAIProviderConfig | ProviderKeyConfig).priority;\n    if (typeof priority !== 'number') return null;\n    return (\n      <span\n        className={`${styles.statusBadge} ${styles.statusActive}`}\n        style={{ background: '#fef3c7', borderColor: '#f59e0b', color: '#b45309' }}\n      >\n        {t('providersPage.form.priority')}: {priority}\n      </span>\n    );\n  };\n\n  const renderPrimary = (r: ProviderResource) => {\n",
-        "const renderPriorityBadge = (r: ProviderResource)",
-    )
-    replace_once(
-        path,
-        "                  {renderStatus(resource)}\n",
-        "                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>\n                    {renderStatus(resource)}\n                    {renderPriorityBadge(resource)}\n                  </div>\n",
-    )
+    """
+    patch_provider_priority_badge is now a no-op because upstream includes:
+    - GeminiKeyConfig, ProviderKeyConfig imports
+    - renderPriorityBadge function with ampcode check
+    - priority badge display in status cell
+    Retained for structural compatibility.
+    """
+    pass
 
 
 def patch_provider_disabled_sort(target: Path) -> None:
@@ -419,22 +410,14 @@ def patch_provider_base_url_link(target: Path) -> None:
 
 
 def patch_provider_detail_models(target: Path) -> None:
-    path = target / 'src/features/providers/sheets/ResourceDetailView.tsx'
-    replace_once(
-        path,
-        "import type { OpenAIProviderConfig } from '@/types';\n",
-        "import type { AmpcodeConfig, OpenAIProviderConfig } from '@/types';\n",
-    )
-    replace_once(
-        path,
-        "  const openaiConfig =\n    resource.brand === 'openaiCompatibility'\n      ? (resource.raw as OpenAIProviderConfig)\n      : null;\n  const apiKeyEntries = openaiConfig?.apiKeyEntries ?? [];\n\n  return (\n",
-        "  const openaiConfig =\n    resource.brand === 'openaiCompatibility'\n      ? (resource.raw as OpenAIProviderConfig)\n      : null;\n  const ampcodeConfig = resource.brand === 'ampcode' ? (resource.raw as AmpcodeConfig) : null;\n  const apiKeyEntries = openaiConfig?.apiKeyEntries ?? [];\n  const modelEntries =\n    resource.brand === 'ampcode'\n      ? (ampcodeConfig?.modelMappings ?? []).map((mapping, index) => ({\n          key: `${mapping.from ?? 'from'}-${mapping.to ?? 'to'}-${index}`,\n          title: mapping.from?.trim() || t('providersPage.status.notSet'),\n          subtitle: mapping.to?.trim() || t('providersPage.status.notSet'),\n        }))\n      : ((resource.raw as { models?: Array<{ name?: string; alias?: string; priority?: number; testModel?: string }> })\n          .models ?? []).map((model, index) => {\n          const details = [\n            model.alias?.trim() ? `${t('alias')}: ${model.alias.trim()}` : '',\n            typeof model.priority === 'number'\n              ? `${t('providersPage.form.priority')}: ${model.priority}`\n              : '',\n            model.testModel?.trim() ? `${t('providersPage.form.testModel')}: ${model.testModel.trim()}` : '',\n          ].filter(Boolean);\n          return {\n            key: `${model.name ?? 'model'}-${index}`,\n            title: model.name?.trim() || t('providersPage.status.notSet'),\n            subtitle: details.join(' · '),\n          };\n        });\n\n  return (\n",
-    )
-    replace_once(
-        path,
-        "      <dl className={styles.dl}>\n        {primary.map(([key, value]) => (\n          <div key={key}>\n            <dt className={styles.dt}>{t(`providersPage.detail.fields.${key}`)}</dt>\n            <dd className={styles.dd}>{value}</dd>\n          </div>\n        ))}\n      </dl>\n\n      {openaiConfig && apiKeyEntries.length > 0 ? (\n",
-        "      <dl className={styles.dl}>\n        {primary.map(([key, value]) => (\n          <div key={key}>\n            <dt className={styles.dt}>{t(`providersPage.detail.fields.${key}`)}</dt>\n            <dd className={styles.dd}>{value}</dd>\n          </div>\n        ))}\n      </dl>\n\n      {modelEntries.length > 0 ? (\n        <div style={{ marginTop: 16 }}>\n          <div className={styles.apiKeyEntriesLabel}>{t('providersPage.detail.fields.models')}</div>\n          <div className={styles.apiKeyEntryList}>\n            {modelEntries.map((entry, index) => (\n              <div key={entry.key} className={styles.apiKeyEntryCard}>\n                <span className={styles.apiKeyEntryIndex}>{index + 1}</span>\n                <span className={styles.apiKeyEntryKey}>{entry.title}</span>\n                {entry.subtitle ? (\n                  <span className={styles.apiKeyEntryProxy}>{entry.subtitle}</span>\n                ) : null}\n              </div>\n            ))}\n          </div>\n        </div>\n      ) : null}\n\n      {openaiConfig && apiKeyEntries.length > 0 ? (\n",
-    )
+    """
+    patch_provider_detail_models is now a no-op because upstream includes:
+    - AmpcodeConfig import
+    - ampcodeConfig extraction and modelEntries mapping
+    - model details display with alias, priority, testModel
+    Retained for structural compatibility.
+    """
+    pass
 
 
 def patch_locales(target: Path) -> None:
