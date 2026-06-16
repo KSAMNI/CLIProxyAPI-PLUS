@@ -218,6 +218,16 @@ def patch_quota_configs(target: Path) -> None:
     pass
 
 
+def patch_provider_types(target: Path) -> None:
+    """Add 'ampcode' to ProviderBrand type definition."""
+    path = target / 'src/features/providers/types.ts'
+    replace_once(
+        path,
+        "export type ProviderBrand =\n  | 'gemini'\n  | 'codex'\n  | 'claude'\n  | 'vertex'\n  | 'openaiCompatibility';\n",
+        "export type ProviderBrand =\n  | 'ampcode'\n  | 'gemini'\n  | 'codex'\n  | 'claude'\n  | 'vertex'\n  | 'openaiCompatibility';\n",
+    )
+
+
 def patch_quota_page(target: Path) -> None:
     """
     patch_quota_page is now a no-op because upstream includes quotaPersistenceMiddleware.
@@ -465,6 +475,7 @@ def main() -> None:
     patch_icons(target)
     patch_quota_types(target)
     patch_quota_configs(target)
+    patch_provider_types(target)
     patch_quota_page(target)
     patch_quota_card(target)
     patch_supporting_api_and_types(target)
