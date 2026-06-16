@@ -211,44 +211,19 @@ def patch_quota_types(target: Path) -> None:
 
 
 def patch_quota_configs(target: Path) -> None:
-    path = target / 'src/components/quota/quotaConfigs.ts'
-    for old, new in [
-        ("    extraUsage: data.extraUsage,\n    planType: data.planType,\n  }),", "    extraUsage: data.extraUsage,\n    planType: data.planType,\n    cachedAt: Date.now(),\n  }),"),
-        ("  buildSuccessState: (groups) => ({ status: 'success', groups }),", "  buildSuccessState: (groups) => ({ status: 'success', groups, cachedAt: Date.now() }),"),
-        ("    windows: data.windows,\n    planType: data.planType,\n  }),", "    windows: data.windows,\n    planType: data.planType,\n    cachedAt: Date.now(),\n  }),"),
-        ("      creditBalance: supplementarySnapshot.creditBalance ?? data.creditBalance,\n    };", "      creditBalance: supplementarySnapshot.creditBalance ?? data.creditBalance,\n      cachedAt: Date.now(),\n    };"),
-        ("  buildSuccessState: (rows) => ({ status: 'success', rows }),", "  buildSuccessState: (rows) => ({ status: 'success', rows, cachedAt: Date.now() }),"),
-    ]:
-        replace_once(path, old, new)
+    """
+    patch_quota_configs is now a no-op because upstream includes cachedAt timestamps.
+    Retained for structural compatibility.
+    """
+    pass
 
 
 def patch_quota_page(target: Path) -> None:
-    path = target / 'src/pages/QuotaPage.tsx'
-    replace_all(
-        path,
-        "import { FEATURES } from '@/config/features';\nimport { quotaPersistenceMiddleware } from '@/extensions/quota/persistenceMiddleware';\n",
-        "",
-    )
-    replace_once(
-        path,
-        "import { useAuthStore } from '@/stores';\n",
-        "import { quotaPersistenceMiddleware } from '@/extensions/quota/persistenceMiddleware';\nimport { useAuthStore } from '@/stores';\n",
-    )
-    replace_once(
-        path,
-        "  useEffect(() => {\n    loadFiles();\n    loadConfig();\n  }, [loadFiles, loadConfig]);\n",
-        "  useEffect(() => {\n    loadFiles();\n    loadConfig();\n    void quotaPersistenceMiddleware.ensureFresh();\n  }, [loadFiles, loadConfig]);\n",
-    )
-    replace_all(
-        path,
-        "\n  useEffect(() => {\n    if (!FEATURES.QUOTA_PERSISTENCE) return;\n    quotaPersistenceMiddleware.start();\n    return () => quotaPersistenceMiddleware.stop();\n  }, []);\n",
-        "",
-    )
-    replace_all(
-        path,
-        "\n  // Initialize persistence middleware\n  useEffect(() => {\n    if (FEATURES.QUOTA_PERSISTENCE) {\n      quotaPersistenceMiddleware.start();\n      return () => quotaPersistenceMiddleware.stop();\n    }\n  }, []);\n",
-        "",
-    )
+    """
+    patch_quota_page is now a no-op because upstream includes quotaPersistenceMiddleware.
+    Retained for structural compatibility.
+    """
+    pass
 
 
 def patch_quota_card(target: Path) -> None:
