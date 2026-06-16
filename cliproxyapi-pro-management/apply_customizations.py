@@ -219,13 +219,11 @@ def patch_quota_configs(target: Path) -> None:
 
 
 def patch_provider_types(target: Path) -> None:
-    """Add 'ampcode' to ProviderBrand type definition."""
-    path = target / 'src/features/providers/types.ts'
-    replace_once(
-        path,
-        "export type ProviderBrand =\n  | 'gemini'\n  | 'codex'\n  | 'claude'\n  | 'vertex'\n  | 'openaiCompatibility';\n",
-        "export type ProviderBrand =\n  | 'ampcode'\n  | 'gemini'\n  | 'codex'\n  | 'claude'\n  | 'vertex'\n  | 'openaiCompatibility';\n",
-    )
+    """
+    patch_provider_types is now a no-op because upstream v1.16.1 includes 'ampcode' in ProviderBrand.
+    Retained for structural compatibility.
+    """
+    pass
 
 
 def patch_quota_page(target: Path) -> None:
