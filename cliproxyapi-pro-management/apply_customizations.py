@@ -378,70 +378,14 @@ def patch_provider_priority_badge(target: Path) -> None:
 
 
 def patch_provider_disabled_sort(target: Path) -> None:
-    path = target / 'src/features/providers/ProvidersWorkbenchPage.tsx'
-    replace_once(
-        path,
-        "import { useCallback, useMemo, useRef, useState } from 'react';\n",
-        "import { useCallback, useEffect, useMemo, useRef, useState } from 'react';\n",
-    )
-    replace_once(
-        path,
-        "import type { OpenAIProviderConfig } from '@/types';\n",
-        "import type { GeminiKeyConfig, OpenAIProviderConfig, ProviderKeyConfig } from '@/types';\n",
-    )
-    replace_once(
-        path,
-        "import type { ProviderBrand, ProviderResource } from './types';\n",
-        "import type { ProviderBrand, ProviderGroup, ProviderResource } from './types';\n",
-    )
-    text = read(path)
-    priority_helper = "const getProviderPriority = (r: ProviderResource): number => {\n  if (r.brand === 'ampcode') return 0;\n  const priority =\n    r.brand === 'gemini'\n      ? (r.raw as GeminiKeyConfig).priority\n      : (r.raw as OpenAIProviderConfig | ProviderKeyConfig).priority;\n  return typeof priority === 'number' ? priority : 0;\n};"
-    group_sort_helpers = "const getProviderActiveCount = (group: ProviderGroup): number =>\n  group.resources.filter((r) => !r.disabled && !r.flags.isPlaceholder).length;\n\nconst getProviderTotalCount = (group: ProviderGroup): number =>\n  group.resources.filter((r) => !r.flags.isPlaceholder).length;\n\nconst sortProviderGroupsByActiveEntries = (groups: ProviderGroup[]): ProviderGroup[] =>\n  [...groups].sort((a, b) => {\n    const activeDiff = getProviderActiveCount(b) - getProviderActiveCount(a);\n    if (activeDiff !== 0) return activeDiff;\n\n    const totalDiff = getProviderTotalCount(b) - getProviderTotalCount(a);\n    if (totalDiff !== 0) return totalDiff;\n\n    return 0;\n  });"
-    if "const getProviderActiveCount" not in text:
-        if priority_helper in text:
-            write(path, text.replace(priority_helper, f"{priority_helper}\n\n{group_sort_helpers}", 1))
-        else:
-            insert_once(
-                path,
-                "const matchesFilter = (r: ProviderResource, normalized: string): boolean => {\n",
-                f"{priority_helper}\n\n{group_sort_helpers}\n\nconst matchesFilter = (r: ProviderResource, normalized: string): boolean => {{\n",
-                "const getProviderActiveCount",
-            )
-    replace_once(
-        path,
-        "  const [openaiSortBy, setOpenaiSortBy] = useState<OpenAISortBy>('name');\n  const [openaiSortDir, setOpenaiSortDir] = useState<SortDir>('asc');\n",
-        "  const [openaiSortBy, setOpenaiSortBy] = useState<OpenAISortBy>('priority');\n  const [openaiSortDir, setOpenaiSortDir] = useState<SortDir>('desc');\n",
-    )
-    replace_once(
-        path,
-        "  const sheetRef = useRef<ProviderSheetHandle>(null);\n",
-        "  const sheetRef = useRef<ProviderSheetHandle>(null);\n  const activeBrandTouchedRef = useRef(false);\n",
-    )
-    replace_once(
-        path,
-        "  const groups = useMemo(() => workbench.snapshot?.groups ?? [], [workbench.snapshot]);\n  const activeGroup =\n    groups.find((g) => g.id === activeBrand) ?? groups[0] ?? null;\n",
-        "  const groups = useMemo(\n    () => sortProviderGroupsByActiveEntries(workbench.snapshot?.groups ?? []),\n    [workbench.snapshot]\n  );\n\n  useEffect(() => {\n    if (activeBrandTouchedRef.current) return;\n    const topActiveGroup = groups.find((g) => getProviderActiveCount(g) > 0);\n    if (topActiveGroup && topActiveGroup.id !== activeBrand) {\n      setActiveBrand(topActiveGroup.id);\n    }\n  }, [activeBrand, groups]);\n\n  const activeGroup =\n    groups.find((g) => g.id === activeBrand) ?? groups[0] ?? null;\n",
-    )
-    replace_once(
-        path,
-        "  const visibleResources = useMemo(() => {\n    if (!isOpenAI) return filteredResources;\n\n    let arr = filteredResources;\n",
-        "  const visibleResources = useMemo(() => {\n    if (!isOpenAI) {\n      return [...filteredResources].sort((a, b) => {\n        const disabledDiff = Number(a.disabled) - Number(b.disabled);\n        if (disabledDiff !== 0) return disabledDiff;\n        return getProviderPriority(b) - getProviderPriority(a);\n      });\n    }\n\n    let arr = filteredResources;\n",
-    )
-    replace_once(
-        path,
-        "    const sorted = [...arr].sort((a, b) => {\n      let diff = 0;\n",
-        "    const sorted = [...arr].sort((a, b) => {\n      const disabledDiff = Number(a.disabled) - Number(b.disabled);\n      if (disabledDiff !== 0) return disabledDiff;\n\n      let diff = 0;\n",
-    )
-    replace_once(
-        path,
-        "        const ap = (a.raw as OpenAIProviderConfig).priority ?? 0;\n        const bp = (b.raw as OpenAIProviderConfig).priority ?? 0;\n        diff = ap - bp;\n",
-        "        diff = getProviderPriority(a) - getProviderPriority(b);\n",
-    )
-    replace_once(
-        path,
-        "              setActiveBrand(brand);\n",
-        "              activeBrandTouchedRef.current = true;\n              setActiveBrand(brand);\n",
-    )
+    """
+    patch_provider_disabled_sort is now a no-op because upstream includes:
+    - activeBrandTouchedRef and auto-selection of active groups
+    - sortProviderGroupsByActiveEntries with group sorting helpers
+    - disabled-first sorting and priority sorting in visibleResources
+    Retained for structural compatibility.
+    """
+    pass
 
 
 def patch_provider_base_url_link(target: Path) -> None:
